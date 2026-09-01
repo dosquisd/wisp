@@ -1,0 +1,20 @@
+[wisp]
+server ansible_host={{ instance_ip }}
+
+[wisp:vars]
+ansible_user={{ ssh_user }}
+ansible_ssh_private_key_file={{ ssh_key_file }}
+wireguard_port={{ wireguard_port }}
+wireguard_allowed_ips={{ allowed_ips }}
+wireguard_public_ip={{ wireguard_public_ip }}
+wireguard_interface={{ wireguard_interface }}
+wireguard_ipv4={{ wireguard_ipv4 }}
+wireguard_ipv6={{ wireguard_ipv6 }}
+wireguard_dns1={{ wireguard_dns1 }}
+wireguard_dns2={{ wireguard_dns2 }}
+wireguard_client_name={{ wireguard_client_name }}
+wireguard_client_ipv4={{ wireguard_client_ipv4 }}
+wireguard_client_ipv6={{ wireguard_client_ipv6 }}
+wireguard_skip_client={{ wireguard_skip_client }}
+ansible_python_interpreter=/usr/bin/python3
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
