@@ -19,5 +19,5 @@ class BaseProvider(ABC):
         pass
 
     @abstractmethod
-    def delete_vm(self, region: str, instance_id: str) -> bool:
+    def delete_vm(self, region: str) -> int:
         pass
