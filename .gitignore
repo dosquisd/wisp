@@ -1,3 +1,6 @@
 *.pyc
 **/__pycache__/
 .venv
+
+keys/*.pem
+inventory/inventory.ini
