@@ -1,0 +1,36 @@
+- name: Configure WireGuard
+  hosts: all
+  become: true
+  vars:
+  tasks:
+  - name: Copy WireGuard install script
+    copy:
+      src: ../scripts/wireguard-install.sh
+      dest: /tmp/wireguard-install.sh
+      mode: "0755"
+
+  - name: Install WireGuard (non-interactive)
+    environment:
+      SERVER_PUB_IP: "{{ wireguard_public_ip }}"
+      SERVER_PORT: "{{ wireguard_port }}"
+      ALLOWED_IPS: "{{ wireguard_allowed_ips }}"
+      SERVER_WG_NIC: "{{ wireguard_interface }}"
+      SERVER_WG_IPV4: "{{ wireguard_ipv4 }}"
+      SERVER_WG_IPV6: "{{ wireguard_ipv6 }}"
+      CLIENT_DNS_1: "{{ wireguard_dns1 }}"
+      CLIENT_DNS_2: "{{ wireguard_dns2 }}"
+      AUTO_INSTALL: "y"
+      CLIENT_NAME: "{{ wireguard_client_name }}"
+      CLIENT_WG_IPV4: "{{ wireguard_client_ipv4 }}"
+      CLIENT_WG_IPV6: "{{ wireguard_client_ipv6 }}"
+      SKIP_CLIENT_CREATION: "{{ wireguard_skip_client }}"
+    shell: /tmp/wireguard-install.sh
+    args:
+      creates: /etc/wireguard/params
+
+  - name: Verify WireGuard service is running
+    systemd:
+      name: "wg-quick@{{ wireguard_interface }}"
+      state: started
+      enabled: true
+    ignore_errors: true
