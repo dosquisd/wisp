@@ -131,60 +131,105 @@ function installQuestions() {
 	echo ""
 
 	# Detect public IPv4 or IPv6 address and pre-fill for the user
-	SERVER_PUB_IP=$(ip -4 addr | sed -ne 's|^.* inet \([^/]*\)/.* scope global.*$|\1|p' | awk '{print $1}' | head -1)
 	if [[ -z ${SERVER_PUB_IP} ]]; then
-		# Detect public IPv6 address
-		SERVER_PUB_IP=$(ip -6 addr | sed -ne 's|^.* inet6 \([^/]*\)/.* scope global.*$|\1|p' | head -1)
+		SERVER_PUB_IP=$(ip -4 addr | sed -ne 's|^.* inet \([^/]*\)/.* scope global.*$|\1|p' | awk '{print $1}' | head -1)
+		if [[ -z ${SERVER_PUB_IP} ]]; then
+			SERVER_PUB_IP=$(ip -6 addr | sed -ne 's|^.* inet6 \([^/]*\)/.* scope global.*$|\1|p' | head -1)
+		fi
 	fi
-	read -rp "IPv4 or IPv6 public address: " -e -i "${SERVER_PUB_IP}" SERVER_PUB_IP
+	if [[ -z ${SERVER_PUB_IP} ]] || [[ "${AUTO_INSTALL}" != "y" ]]; then
+		read -rp "IPv4 or IPv6 public address: " -e -i "${SERVER_PUB_IP}" SERVER_PUB_IP
+	fi
 
 	# Detect public interface and pre-fill for the user
-	SERVER_NIC="$(ip -4 route ls | grep default | awk '/dev/ {for (i=1; i<=NF; i++) if ($i == "dev") print $(i+1)}' | head -1)"
-	until [[ ${SERVER_PUB_NIC} =~ ^[a-zA-Z0-9_]+$ ]]; do
-		read -rp "Public interface: " -e -i "${SERVER_NIC}" SERVER_PUB_NIC
-	done
+	if [[ -z ${SERVER_PUB_NIC} ]]; then
+		SERVER_PUB_NIC="$(ip -4 route ls | grep default | awk '/dev/ {for (i=1; i<=NF; i++) if ($i == "dev") print $(i+1)}' | head -1)"
+	fi
+	if [[ -z ${SERVER_PUB_NIC} ]] || [[ "${AUTO_INSTALL}" != "y" ]]; then
+		until [[ ${SERVER_PUB_NIC} =~ ^[a-zA-Z0-9_]+$ ]]; do
+			read -rp "Public interface: " -e -i "${SERVER_NIC}" SERVER_PUB_NIC
+		done
+	fi
 
-	until [[ ${SERVER_WG_NIC} =~ ^[a-zA-Z0-9_]+$ && ${#SERVER_WG_NIC} -lt 16 ]]; do
-		read -rp "WireGuard interface name: " -e -i wg0 SERVER_WG_NIC
-	done
+	if [[ -z ${SERVER_WG_NIC} ]]; then
+		SERVER_WG_NIC="wg0"
+	fi
+	if [[ "${AUTO_INSTALL}" != "y" ]]; then
+		until [[ ${SERVER_WG_NIC} =~ ^[a-zA-Z0-9_]+$ && ${#SERVER_WG_NIC} -lt 16 ]]; do
+			read -rp "WireGuard interface name: " -e -i wg0 SERVER_WG_NIC
+		done
+	fi
 
-	until [[ ${SERVER_WG_IPV4} =~ ^([0-9]{1,3}\.){3} ]]; do
-		read -rp "Server WireGuard IPv4: " -e -i 10.66.66.1 SERVER_WG_IPV4
-	done
+	if [[ -z ${SERVER_WG_IPV4} ]]; then
+		SERVER_WG_IPV4="10.66.66.1"
+	fi
+	if [[ "${AUTO_INSTALL}" != "y" ]]; then
+		until [[ ${SERVER_WG_IPV4} =~ ^([0-9]{1,3}\.){3} ]]; do
+			read -rp "Server WireGuard IPv4: " -e -i 10.66.66.1 SERVER_WG_IPV4
+		done
+	fi
 
-	until [[ ${SERVER_WG_IPV6} =~ ^([a-f0-9]{1,4}:){3,4}: ]]; do
-		read -rp "Server WireGuard IPv6: " -e -i fd42:42:42::1 SERVER_WG_IPV6
-	done
+	if [[ -z ${SERVER_WG_IPV6} ]]; then
+		SERVER_WG_IPV6="fd42:42:42::1"
+	fi
+	if [[ "${AUTO_INSTALL}" != "y" ]]; then
+		until [[ ${SERVER_WG_IPV6} =~ ^([a-f0-9]{1,4}:){3,4}: ]]; do
+			read -rp "Server WireGuard IPv6: " -e -i fd42:42:42::1 SERVER_WG_IPV6
+		done
+	fi
 
 	# Generate random number within private ports range
-	RANDOM_PORT=$(shuf -i49152-65535 -n1)
-	until [[ ${SERVER_PORT} =~ ^[0-9]+$ ]] && [ "${SERVER_PORT}" -ge 1 ] && [ "${SERVER_PORT}" -le 65535 ]; do
-		read -rp "Server WireGuard port [1-65535]: " -e -i "${RANDOM_PORT}" SERVER_PORT
-	done
+	if [[ -z ${SERVER_PORT} ]]; then
+		RANDOM_PORT=$(shuf -i49152-65535 -n1)
+		SERVER_PORT="${RANDOM_PORT}"
+	fi
+	if [[ "${AUTO_INSTALL}" != "y" ]]; then
+		until [[ ${SERVER_PORT} =~ ^[0-9]+$ ]] && [ "${SERVER_PORT}" -ge 1 ] && [ "${SERVER_PORT}" -le 65535 ]; do
+			read -rp "Server WireGuard port [1-65535]: " -e -i "${RANDOM_PORT}" SERVER_PORT
+		done
+	fi
 
 	# Cloudflare DNS by default
-	until [[ ${CLIENT_DNS_1} =~ ^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$ ]]; do
-		read -rp "First DNS resolver to use for the clients: " -e -i 1.1.1.1 CLIENT_DNS_1
-	done
-	until [[ ${CLIENT_DNS_2} =~ ^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$ ]]; do
-		read -rp "Second DNS resolver to use for the clients (optional): " -e -i 1.0.0.1 CLIENT_DNS_2
-		if [[ ${CLIENT_DNS_2} == "" ]]; then
-			CLIENT_DNS_2="${CLIENT_DNS_1}"
-		fi
-	done
+	if [[ -z ${CLIENT_DNS_1} ]]; then
+		CLIENT_DNS_1="1.1.1.1"
+	fi
+	if [[ "${AUTO_INSTALL}" != "y" ]]; then
+		until [[ ${CLIENT_DNS_1} =~ ^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$ ]]; do
+			read -rp "First DNS resolver to use for the clients: " -e -i 1.1.1.1 CLIENT_DNS_1
+		done
+	fi
 
-	until [[ ${ALLOWED_IPS} =~ ^.+$ ]]; do
-		echo -e "\nWireGuard uses a parameter called AllowedIPs to determine what is routed over the VPN."
-		read -rp "Allowed IPs list for generated clients (leave default to route everything): " -e -i '0.0.0.0/0,::/0' ALLOWED_IPS
-		if [[ ${ALLOWED_IPS} == "" ]]; then
-			ALLOWED_IPS="0.0.0.0/0,::/0"
-		fi
-	done
+	if [[ -z ${CLIENT_DNS_2} ]]; then
+		CLIENT_DNS_2="1.0.0.1"
+	fi
+	if [[ "${AUTO_INSTALL}" != "y" ]]; then
+		until [[ ${CLIENT_DNS_2} =~ ^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$ ]]; do
+			read -rp "Second DNS resolver to use for the clients (optional): " -e -i 1.0.0.1 CLIENT_DNS_2
+			if [[ ${CLIENT_DNS_2} == "" ]]; then
+				CLIENT_DNS_2="${CLIENT_DNS_1}"
+			fi
+		done
+	fi
+
+	if [[ -z ${ALLOWED_IPS} ]]; then
+		ALLOWED_IPS="0.0.0.0/0,::/0"
+	fi
+	if [[ "${AUTO_INSTALL}" != "y" ]]; then
+		until [[ ${ALLOWED_IPS} =~ ^.+$ ]]; do
+			echo -e "\nWireGuard uses a parameter called AllowedIPs to determine what is routed over the VPN."
+			read -rp "Allowed IPs list for generated clients (leave default to route everything): " -e -i '0.0.0.0/0,::/0' ALLOWED_IPS
+			if [[ ${ALLOWED_IPS} == "" ]]; then
+				ALLOWED_IPS="0.0.0.0/0,::/0"
+			fi
+		done
+	fi
 
 	echo ""
 	echo "Okay, that was all I needed. We are ready to setup your WireGuard server now."
 	echo "You will be able to generate a client at the end of the installation."
-	read -n1 -r -p "Press any key to continue..."
+	if [[ "${AUTO_INSTALL}" != "y" ]]; then
+		read -n1 -r -p "Press any key to continue..."
+	fi
 }
 
 function installWireGuard() {
@@ -338,6 +383,11 @@ net.ipv6.conf.all.forwarding = 1" >/etc/sysctl.d/wg.conf
 }
 
 function newClient() {
+	# Allow skipping client creation
+	if [[ "${SKIP_CLIENT_CREATION}" == "y" ]]; then
+		return 0
+	fi
+
 	# If SERVER_PUB_IP is IPv6, add brackets if missing
 	if [[ ${SERVER_PUB_IP} =~ .*:.* ]]; then
 		if [[ ${SERVER_PUB_IP} != *"["* ]] || [[ ${SERVER_PUB_IP} != *"]"* ]]; then
@@ -346,22 +396,39 @@ function newClient() {
 	fi
 	ENDPOINT="${SERVER_PUB_IP}:${SERVER_PORT}"
 
-	echo ""
-	echo "Client configuration"
-	echo ""
-	echo "The client name must consist of alphanumeric character(s). It may also include underscores or dashes and can't exceed 15 chars."
-
-	until [[ ${CLIENT_NAME} =~ ^[a-zA-Z0-9_-]+$ && ${CLIENT_EXISTS} == '0' && ${#CLIENT_NAME} -lt 16 ]]; do
-		read -rp "Client name: " -e CLIENT_NAME
-		CLIENT_EXISTS=$(grep -c -E "^### Client ${CLIENT_NAME}\$" "/etc/wireguard/${SERVER_WG_NIC}.conf")
-
-		if [[ ${CLIENT_EXISTS} != 0 ]]; then
+	# Client name: use provided, auto-generate, or prompt
+	if [[ -z ${CLIENT_NAME} ]]; then
+		if [[ "${AUTO_INSTALL}" == "y" ]]; then
+			CLIENT_NAME="wisp-client-$(date +%s)"
+		else
 			echo ""
-			echo -e "${ORANGE}A client with the specified name was already created, please choose another name.${NC}"
+			echo "Client configuration"
 			echo ""
+			echo "The client name must consist of alphanumeric character(s). It may also include underscores or dashes and can't exceed 15 chars."
+
+			until [[ ${CLIENT_NAME} =~ ^[a-zA-Z0-9_-]+$ && ${CLIENT_EXISTS} == '0' && ${#CLIENT_NAME} -lt 16 ]]; do
+				read -rp "Client name: " -e CLIENT_NAME
+				CLIENT_EXISTS=$(grep -c -E "^### Client ${CLIENT_NAME}\$" "/etc/wireguard/${SERVER_WG_NIC}.conf")
+
+				if [[ ${CLIENT_EXISTS} != 0 ]]; then
+					echo ""
+					echo -e "${ORANGE}A client with the specified name was already created, please choose another name.${NC}"
+					echo ""
+				fi
+			done
 		fi
-	done
+	fi
 
+	# Check if client name already exists
+	CLIENT_EXISTS=$(grep -c -E "^### Client ${CLIENT_NAME}\$" "/etc/wireguard/${SERVER_WG_NIC}.conf")
+	if [[ ${CLIENT_EXISTS} != 0 ]]; then
+		echo ""
+		echo -e "${ORANGE}A client with the specified name was already created, please choose another name.${NC}"
+		echo ""
+		return 1
+	fi
+
+	# Find next available IPv4
 	for DOT_IP in {2..254}; do
 		DOT_EXISTS=$(grep -c "${SERVER_WG_IPV4::-1}${DOT_IP}" "/etc/wireguard/${SERVER_WG_NIC}.conf")
 		if [[ ${DOT_EXISTS} == '0' ]]; then
@@ -376,30 +443,44 @@ function newClient() {
 	fi
 
 	BASE_IP=$(echo "$SERVER_WG_IPV4" | awk -F '.' '{ print $1"."$2"."$3 }')
-	until [[ ${IPV4_EXISTS} == '0' ]]; do
-		read -rp "Client WireGuard IPv4: ${BASE_IP}." -e -i "${DOT_IP}" DOT_IP
-		CLIENT_WG_IPV4="${BASE_IP}.${DOT_IP}"
-		IPV4_EXISTS=$(grep -c "$CLIENT_WG_IPV4/32" "/etc/wireguard/${SERVER_WG_NIC}.conf")
+	# Client IPv4: use provided, auto-assign, or prompt
+	if [[ -z ${CLIENT_WG_IPV4} ]]; then
+		if [[ "${AUTO_INSTALL}" == "y" ]]; then
+			CLIENT_WG_IPV4="${BASE_IP}.${DOT_IP}"
+		else
+			until [[ ${IPV4_EXISTS} == '0' ]]; do
+				read -rp "Client WireGuard IPv4: ${BASE_IP}." -e -i "${DOT_IP}" DOT_IP
+				CLIENT_WG_IPV4="${BASE_IP}.${DOT_IP}"
+				IPV4_EXISTS=$(grep -c "$CLIENT_WG_IPV4/32" "/etc/wireguard/${SERVER_WG_NIC}.conf")
 
-		if [[ ${IPV4_EXISTS} != 0 ]]; then
-			echo ""
-			echo -e "${ORANGE}A client with the specified IPv4 was already created, please choose another IPv4.${NC}"
-			echo ""
+				if [[ ${IPV4_EXISTS} != 0 ]]; then
+					echo ""
+					echo -e "${ORANGE}A client with the specified IPv4 was already created, please choose another IPv4.${NC}"
+					echo ""
+				fi
+			done
 		fi
-	done
+	fi
 
 	BASE_IP=$(echo "$SERVER_WG_IPV6" | awk -F '::' '{ print $1 }')
-	until [[ ${IPV6_EXISTS} == '0' ]]; do
-		read -rp "Client WireGuard IPv6: ${BASE_IP}::" -e -i "${DOT_IP}" DOT_IP
-		CLIENT_WG_IPV6="${BASE_IP}::${DOT_IP}"
-		IPV6_EXISTS=$(grep -c "${CLIENT_WG_IPV6}/128" "/etc/wireguard/${SERVER_WG_NIC}.conf")
+	# Client IPv6: use provided, auto-assign, or prompt
+	if [[ -z ${CLIENT_WG_IPV6} ]]; then
+		if [[ "${AUTO_INSTALL}" == "y" ]]; then
+			CLIENT_WG_IPV6="${BASE_IP}::${DOT_IP}"
+		else
+			until [[ ${IPV6_EXISTS} == '0' ]]; do
+				read -rp "Client WireGuard IPv6: ${BASE_IP}::" -e -i "${DOT_IP}" DOT_IP
+				CLIENT_WG_IPV6="${BASE_IP}::${DOT_IP}"
+				IPV6_EXISTS=$(grep -c "${CLIENT_WG_IPV6}/128" "/etc/wireguard/${SERVER_WG_NIC}.conf")
 
-		if [[ ${IPV6_EXISTS} != 0 ]]; then
-			echo ""
-			echo -e "${ORANGE}A client with the specified IPv6 was already created, please choose another IPv6.${NC}"
-			echo ""
+				if [[ ${IPV6_EXISTS} != 0 ]]; then
+					echo ""
+					echo -e "${ORANGE}A client with the specified IPv6 was already created, please choose another IPv6.${NC}"
+					echo ""
+				fi
+			done
 		fi
-	done
+	fi
 
 	# Generate key pair for the client
 	CLIENT_PRIV_KEY=$(wg genkey)
