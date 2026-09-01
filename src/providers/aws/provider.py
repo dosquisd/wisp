@@ -7,7 +7,6 @@
 # 3. Same as delete_vm, there should be a method to stop a specific VM, instead of stopping the entire stack.
 
 import os
-import subprocess
 import time
 from collections.abc import Sequence
 
@@ -15,23 +14,26 @@ import boto3
 from tqdm import tqdm
 
 from src.config.constants import (
+    WIREGUARD_DNS1,
+    WIREGUARD_DNS2,
+    WIREGUARD_INTERFACE,
     WIREGUARD_INVENTORY_PATH,
-    WIREGUARD_INVENTORY_TEMPLATE_PATH,
+    WIREGUARD_IPV4,
+    WIREGUARD_IPV6,
     WIREGUARD_KEY_PATH,
     WIREGUARD_KEYS_DIR,
-    WIREGUARD_PLAYBOOK_PATH,
 )
 from src.config.settings import WispConfig
 from src.providers.aws.constants import DEFAULT_REGION
 from src.providers.aws.pulumi import create_ec2_instance
 from src.providers.base import BaseProvider, DeployVMResult, ProgressCallback
+from src.schemas import InventoryContext
 from src.utils import (
     create_or_select_pulumi_stack,
-    get_ansible_playbook_bin,
     get_public_ip,
     logger,
-    render_inventory_template,
 )
+from src.wireguard import configure_remote_server
 
 
 class AWSProvider(BaseProvider):
@@ -125,47 +127,28 @@ class AWSProvider(BaseProvider):
         allowed_ips = f"{get_public_ip()}/32" if force_current_ip else "0.0.0.0/0,::/0"
 
         # Render the Ansible inventory from the template
-        template_context = {
-            "ssh_user": ssh_user,
-            "instance_ip": public_ip,
-            "ssh_key_file": WIREGUARD_KEY_PATH,
-            "wireguard_port": wireguard_port,
-            "allowed_ips": allowed_ips,
-            "wireguard_public_ip": public_ip,
-            "wireguard_interface": config.wireguard_interface,
-            "wireguard_ipv4": config.wireguard_ipv4,
-            "wireguard_ipv6": config.wireguard_ipv6,
-            "wireguard_dns1": config.wireguard_dns1,
-            "wireguard_dns2": config.wireguard_dns2,
-            "wireguard_client_name": "",
-            "wireguard_client_ipv4": "",
-            "wireguard_client_ipv6": "",
-            "wireguard_skip_client": "n",
-        }
-        render_inventory_template(
-            template_path=WIREGUARD_INVENTORY_TEMPLATE_PATH,
-            output_path=WIREGUARD_INVENTORY_PATH,
-            context=template_context,
-            mode=0o644,
+        template_context = InventoryContext(
+            ssh_user=ssh_user,
+            instance_ip=public_ip,
+            ssh_key_file=WIREGUARD_KEY_PATH,
+            wireguard_port=wireguard_port,
+            allowed_ips=allowed_ips,
+            wireguard_public_ip=public_ip,
+            wireguard_interface=WIREGUARD_INTERFACE,
+            wireguard_ipv4=WIREGUARD_IPV4,
+            wireguard_ipv6=WIREGUARD_IPV6,
+            wireguard_dns1=WIREGUARD_DNS1,
+            wireguard_dns2=WIREGUARD_DNS2,
+            wireguard_client_name="",
+            wireguard_client_ipv4="",
+            wireguard_client_ipv6="",
+            wireguard_skip_client="n",
         )
-
-        logger.debug(f"Ansible inventory written to '{WIREGUARD_INVENTORY_PATH}'")
 
         if on_progress:
             on_progress("Instalando y configurando WireGuard con Ansible...", 0.85)
 
-        # Run the Ansible playbook to install WireGuard
-        ansible_playbook_bin = get_ansible_playbook_bin()
-        logger.debug(f"Running Ansible playbook using '{ansible_playbook_bin}'")
-        subprocess.run(
-            [
-                ansible_playbook_bin,
-                "-i",
-                str(WIREGUARD_INVENTORY_PATH),
-                str(WIREGUARD_PLAYBOOK_PATH),
-            ],
-            check=True,
-        )
+        configure_remote_server(template_context)
 
         if on_progress:
             on_progress("¡VPN desplegada y activa!", 1.0)

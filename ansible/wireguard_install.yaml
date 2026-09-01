@@ -5,7 +5,7 @@
   tasks:
   - name: Copy WireGuard install script
     copy:
-      src: ../scripts/wireguard-install.sh
+      src: ../scripts/wireguard-server-install.sh
       dest: /tmp/wireguard-install.sh
       mode: "0755"
 

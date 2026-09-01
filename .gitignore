@@ -4,3 +4,6 @@
 
 keys/*.pem
 inventory/inventory.ini
+
+# Wireguard configuration files
+wireguard-confs/*.conf

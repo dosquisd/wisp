@@ -23,6 +23,7 @@ class BaseProvider(ABC):
     def deploy_vm(
         self,
         region: str,
+        force_current_ip: bool = False,
         config: WispConfig | None = None,
         on_progress: ProgressCallback | None = None,
     ) -> DeployVMResult:
