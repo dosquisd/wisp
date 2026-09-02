@@ -11,6 +11,7 @@ dependencies = [
     "pulumi>=3.0.0,<4.0.0",
     "pulumi-aws>=7.0.0,<8.0.0",
     "pulumi-tls>=5.5.1",
+    "textual>=8.2.8",
     "tqdm>=4.70.0",
 ]
 
