@@ -26,9 +26,6 @@ def ensure_plugins() -> None:
     _plugins_ready = True
 
 
-ensure_plugins()
-
-
 def get_ami(
     region: str | None = None,
     *,
@@ -139,6 +136,7 @@ def create_ec2_instance(
     wireguard_port: int | None = None,
     cidr_blocks: list[str] | None = None,
 ) -> None:
+    ensure_plugins()
     if custom_resource_name is None:
         custom_resource_name = f"wisp-instance-{uuid.uuid4().hex[:8]}"
         logger.debug(
