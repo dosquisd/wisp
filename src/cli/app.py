@@ -1,6 +1,7 @@
 from textual.app import App
 from textual.binding import Binding
 
+from src.cli.screens import ConfigScreen, MainMenuScreen
 from src.cli.state import AppState
 
 
@@ -94,3 +95,8 @@ class WispApp(App):
     def __init__(self) -> None:
         super().__init__()
         self.state = AppState()
+
+    def on_mount(self) -> None:
+        self.install_screen(MainMenuScreen(), name="main_menu")
+        self.install_screen(ConfigScreen(), name="config")
+        self.push_screen("main_menu")
