@@ -1,7 +1,7 @@
 from textual.app import App
 from textual.binding import Binding
 
-from src.cli.screens import ConfigScreen, MainMenuScreen
+from src.cli.screens import ConfigScreen, DeployScreen, MainMenuScreen
 from src.cli.state import AppState
 
 
@@ -38,8 +38,10 @@ class WispApp(App):
         background: #1e293b;
         border: round #38bdf8;
         padding: 1 2;
-        width: 72;
+        width: 74;
         height: auto;
+        max-height: 98%;
+        overflow-y: auto;
     }
 
     .title {
@@ -99,4 +101,5 @@ class WispApp(App):
     def on_mount(self) -> None:
         self.install_screen(MainMenuScreen(), name="main_menu")
         self.install_screen(ConfigScreen(), name="config")
+        self.install_screen(DeployScreen(), name="deploy")
         self.push_screen("main_menu")
