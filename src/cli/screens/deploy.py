@@ -5,6 +5,8 @@ from textual.containers import Center, Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Label, Select, Static
 
+from src.cli.screens.progress import ProgressScreen
+
 FALLBACK_AWS_REGIONS = [
     "us-east-1",
     "us-east-2",
@@ -207,7 +209,7 @@ class DeployScreen(Screen):
         state.provider_name = provider_val
         state.selected_region = region_val
 
-        self.app.push_screen("progress")
+        self.app.push_screen(ProgressScreen())
 
     def action_back(self) -> None:
         self.app.pop_screen()
