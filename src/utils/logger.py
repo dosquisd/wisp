@@ -1,21 +1,45 @@
 import logging
+import logging.handlers
+
+from src.config.constants import ROOTDIR
+
+log_dir = ROOTDIR / "logs"
 
 
-def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
+def setup_logger(name: str) -> logging.Logger:
+    # Create main logger instance 
     logger = logging.getLogger(name)
-    logger.setLevel(level)
+    logger.setLevel(logging.DEBUG)
 
-    ch = logging.StreamHandler()
-    ch.setLevel(level)
+    # Clear any existing handlers to avoid duplicate logs
+    logger.handlers.clear()
 
-    formatter = logging.Formatter(
-        "[%(asctime)s] [%(levelname)s] [%(funcName)s] %(message)s"
+    # File handler for logging to a file
+    file_formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] [%(funcName)s] %(message)s")
+    rotating_handler = logging.handlers.RotatingFileHandler(
+        log_dir / "wisp.log",
+        maxBytes=5 * 1024 * 1024,  # 6MB per file
+        backupCount=5,  # Keep 5 backup files
+        encoding="utf-8",
     )
+    rotating_handler.setLevel(logging.DEBUG)
+    rotating_handler.setFormatter(file_formatter)
 
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
+    # Console handler for logging to the console
+    # it's not necessary, because we're using this program behind a TUI, but it's useful for debugging
+    console_formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] [%(funcName)s] %(message)s")
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.ERROR)
+    console_handler.setFormatter(console_formatter)
+
+    # Add handlers to the logger
+    logger.addHandler(rotating_handler)
+    logger.addHandler(console_handler)
+
+    # Disable propagation to prevent duplicate log messages
+    logger.propagate = False
 
     return logger
 
 
-logger = setup_logger(__name__, level=logging.DEBUG)
+logger = setup_logger("wisp")
