@@ -36,8 +36,8 @@ from src.utils import (
     logger,
 )
 from src.wireguard import (
-    configure_local_wireguard_client,
     configure_remote_server,
+    connect_wireguard_client,
     disconnect_wireguard_client,
 )
 
@@ -68,6 +68,8 @@ class AWSProvider(BaseProvider):
         config: WispConfig | None = None,
         on_progress: ProgressCallback | None = None,
     ) -> DeployVMResult:
+        logger.info(f"Deploying VM in region '{region}'...")
+
         if config is None:
             config = WispConfig(force_current_ip=force_current_ip)
         else:
@@ -76,6 +78,7 @@ class AWSProvider(BaseProvider):
         if on_progress:
             on_progress("Aprovisionando infraestructura en AWS con Pulumi...", 0.05)
 
+        logger.debug("Creating and deploying Pulumi stack...")
         stack = create_or_select_pulumi_stack(
             lambda: self.__create_pulumi_program(
                 region,
@@ -84,7 +87,7 @@ class AWSProvider(BaseProvider):
                 if config.wireguard_port > 0
                 else None,
             )
-        )
+        )  # type: ignore
         up_result = stack.up()
 
         timeout_seconds = config.ansible_timeout
@@ -160,7 +163,7 @@ class AWSProvider(BaseProvider):
 
         # Configure the remote WireGuard server and the local WireGuard client
         configure_remote_server(template_context)
-        configure_local_wireguard_client(WIREGUARD_CLIENT_CONF_PATH)
+        connect_wireguard_client(WIREGUARD_CLIENT_CONF_PATH.read_text())
 
         if on_progress:
             on_progress("¡VPN desplegada y activa!", 1.0)
@@ -175,12 +178,16 @@ class AWSProvider(BaseProvider):
     def delete_vm(
         self, region: str, on_progress: ProgressCallback | None = None
     ) -> int:
+        logger.info(f"Deleting VM in region '{region}'...")
+
+        logger.debug("Disconnecting WireGuard client...")
         disconnect_wireguard_client()
 
         stack = create_or_select_pulumi_stack(
             lambda: self.__create_pulumi_program(region)
-        )
+        )  # type: ignore
 
+        logger.debug("Destroying Pulumi stack...")
         try:
             destroy_result = stack.destroy()
         except Exception as e:  # noqa: BLE001
@@ -188,14 +195,20 @@ class AWSProvider(BaseProvider):
             return 0
 
         # Remove the WireGuard related files if they exist
+        logger.debug("Removing WireGuard related files...")
         if WIREGUARD_INVENTORY_PATH.exists():
             os.remove(WIREGUARD_INVENTORY_PATH)
+            logger.debug(f"Removed inventory file: {WIREGUARD_INVENTORY_PATH}")
 
         if WIREGUARD_KEY_PATH.exists():
             os.remove(WIREGUARD_KEY_PATH)
+            logger.debug(f"Removed WireGuard key file: {WIREGUARD_KEY_PATH}")
 
         if WIREGUARD_CLIENT_CONF_PATH.exists():
             os.remove(WIREGUARD_CLIENT_CONF_PATH)
+            logger.debug(
+                f"Removed WireGuard client config file: {WIREGUARD_CLIENT_CONF_PATH}"
+            )
 
         if on_progress:
             on_progress("Recursos destruidos exitosamente.", 1.0)

@@ -1,5 +1,3 @@
-# Remote configuration of WireGuard server
-
 import subprocess
 
 from src.config.constants import (
