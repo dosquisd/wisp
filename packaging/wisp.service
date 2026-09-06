@@ -1,0 +1,13 @@
+[Unit]
+Description=Priviliged daemon for Wisp
+Requires=wisp.socket
+
+[Service]
+Type=simple
+WorkingDirectory=/usr/local/lib/wisp
+ExecStart=/usr/local/lib/wisp/venv/bin/python -m src.daemon.server
+User=root
+NonBlocking=true
+
+[Install]
+WantedBy=multi-user.target
