@@ -5,6 +5,9 @@
 # Licensed under MIT License
 # Copyright (c) 2019 angristan
 
+# All in one file, to avoid dependency on external files.
+# This is a modified version of the original script.
+
 RED='\033[0;31m'
 ORANGE='\033[0;33m'
 GREEN='\033[0;32m'
