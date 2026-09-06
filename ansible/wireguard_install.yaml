@@ -34,3 +34,18 @@
       state: started
       enabled: true
     ignore_errors: true
+
+  - name: Find WireGuard client configuration file
+    find:
+      paths: "./"
+      patterns: "wg0-client-*.conf"
+    register: wg_client_conf
+    tags: download
+
+  - name: Download WireGuard client configuration
+    fetch:
+      src: "{{ wg_client_conf.files[0].path }}"
+      dest: "../wireguard-confs/wg0-client.conf"
+      flat: yes
+    when: wg_client_conf.matched > 0
+    tags: download

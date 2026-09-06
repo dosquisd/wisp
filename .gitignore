@@ -1,7 +1,9 @@
 *.pyc
 **/__pycache__/
 .venv
+.ruff_cache
 
+# Ignore private keys and inventory files
 keys/*.pem
 inventory/inventory.ini
 

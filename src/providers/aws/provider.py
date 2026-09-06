@@ -14,6 +14,8 @@ import boto3
 from tqdm import tqdm
 
 from src.config.constants import (
+    WIREGUARD_CLIENT_CONF_PATH,
+    WIREGUARD_CLIENT_NAME,
     WIREGUARD_DNS1,
     WIREGUARD_DNS2,
     WIREGUARD_INTERFACE,
@@ -33,7 +35,11 @@ from src.utils import (
     get_public_ip,
     logger,
 )
-from src.wireguard import configure_remote_server
+from src.wireguard import (
+    configure_local_wireguard_client,
+    configure_remote_server,
+    disconnect_wireguard_client,
+)
 
 
 class AWSProvider(BaseProvider):
@@ -46,7 +52,9 @@ class AWSProvider(BaseProvider):
         create_ec2_instance(
             region,
             force_current_ip=force_current_ip,
-            wireguard_port=wireguard_port if (wireguard_port and wireguard_port > 0) else None,
+            wireguard_port=wireguard_port
+            if (wireguard_port and wireguard_port > 0)
+            else None,
         )
 
     def get_available_regions(self) -> Sequence[str]:
@@ -72,7 +80,9 @@ class AWSProvider(BaseProvider):
             lambda: self.__create_pulumi_program(
                 region,
                 force_current_ip=force_current_ip,
-                wireguard_port=config.wireguard_port if config.wireguard_port > 0 else None,
+                wireguard_port=config.wireguard_port
+                if config.wireguard_port > 0
+                else None,
             )
         )
         up_result = stack.up()
@@ -139,7 +149,7 @@ class AWSProvider(BaseProvider):
             wireguard_ipv6=WIREGUARD_IPV6,
             wireguard_dns1=WIREGUARD_DNS1,
             wireguard_dns2=WIREGUARD_DNS2,
-            wireguard_client_name="",
+            wireguard_client_name=WIREGUARD_CLIENT_NAME,
             wireguard_client_ipv4="",
             wireguard_client_ipv6="",
             wireguard_skip_client="n",
@@ -148,7 +158,9 @@ class AWSProvider(BaseProvider):
         if on_progress:
             on_progress("Instalando y configurando WireGuard con Ansible...", 0.85)
 
+        # Configure the remote WireGuard server and the local WireGuard client
         configure_remote_server(template_context)
+        configure_local_wireguard_client(WIREGUARD_CLIENT_CONF_PATH)
 
         if on_progress:
             on_progress("¡VPN desplegada y activa!", 1.0)
@@ -161,12 +173,9 @@ class AWSProvider(BaseProvider):
         )
 
     def delete_vm(
-        self,
-        region: str,
-        on_progress: ProgressCallback | None = None,
+        self, region: str, on_progress: ProgressCallback | None = None
     ) -> int:
-        if on_progress:
-            on_progress("Destruyendo recursos en AWS con Pulumi...", 0.2)
+        disconnect_wireguard_client()
 
         stack = create_or_select_pulumi_stack(
             lambda: self.__create_pulumi_program(region)
@@ -178,12 +187,15 @@ class AWSProvider(BaseProvider):
             logger.error(f"Error destroying stack: {e}")
             return 0
 
-        # Remove the WireGuard inventory and key files if they exist
+        # Remove the WireGuard related files if they exist
         if WIREGUARD_INVENTORY_PATH.exists():
             os.remove(WIREGUARD_INVENTORY_PATH)
 
         if WIREGUARD_KEY_PATH.exists():
             os.remove(WIREGUARD_KEY_PATH)
+
+        if WIREGUARD_CLIENT_CONF_PATH.exists():
+            os.remove(WIREGUARD_CLIENT_CONF_PATH)
 
         if on_progress:
             on_progress("Recursos destruidos exitosamente.", 1.0)

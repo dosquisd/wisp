@@ -8,7 +8,7 @@ DEFAULT_TAG = {
     "created-by": CREATED_BY_TAG,
 }
 
-DEFAULT_ANSIBLE_PLAYBOOK_TIMEOUT_SECONDS: int = 90
+DEFAULT_ANSIBLE_PLAYBOOK_TIMEOUT_SECONDS: int = 60
 
 # Project root, derived from this file's location (src/config/constants.py)
 ROOTDIR = Path(__file__).resolve().parents[2]
@@ -20,6 +20,7 @@ WIREGUARD_INVENTORY_TEMPLATE_PATH = ROOTDIR / "templates" / "inventory.ini.j2"
 WIREGUARD_INVENTORY_PATH = ROOTDIR / "inventory" / "inventory.ini"
 WIREGUARD_KEYS_DIR = ROOTDIR / "keys"
 WIREGUARD_KEY_PATH = WIREGUARD_KEYS_DIR / "wireguard-key.pem"
+WIREGUARD_CLIENT_CONF_PATH = ROOTDIR / "wireguard-confs" / "wg0-client.conf"
 
 # WireGuard defaults (non-interactive installer)
 WIREGUARD_INTERFACE: str = "wg0"
@@ -27,3 +28,4 @@ WIREGUARD_IPV4: str = "10.66.66.1"
 WIREGUARD_IPV6: str = "fd42:42:42::1"
 WIREGUARD_DNS1: str = "1.1.1.1"
 WIREGUARD_DNS2: str = "1.0.0.1"
+WIREGUARD_CLIENT_NAME: str = ""
