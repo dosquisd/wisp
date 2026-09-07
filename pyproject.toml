@@ -15,6 +15,10 @@ dependencies = [
     "tqdm>=4.70.0",
 ]
 
+# Use `uv tool install --editable .`
+[project.scripts]
+wisp = "wisp.main:main"
+
 [tool.ruff]
 exclude = [".git", ".pytest_cache", ".venv"]
 line-length = 88

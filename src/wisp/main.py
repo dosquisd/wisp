@@ -89,7 +89,7 @@ def parse_args() -> RuntimeArgs:
     )
 
 
-if __name__ == "__main__":
+def main() -> None:
     args = parse_args()
     command = args["command"]
     region = args["region"]
@@ -134,3 +134,7 @@ if __name__ == "__main__":
         delete_success = provider.delete_vm(region=region)
         print(f"Deleted VM. Count: {delete_success}")
         sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

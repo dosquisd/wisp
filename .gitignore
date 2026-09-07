@@ -3,6 +3,10 @@
 .venv
 .ruff_cache
 
+# Ignore build artifacts
+build
+**/*.egg-info
+
 # Ignore private keys and inventory files
 keys/*.pem
 inventory/inventory.ini
