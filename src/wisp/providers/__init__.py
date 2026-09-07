@@ -1,3 +1,10 @@
+"""Cloud provider registry.
+
+Maps each :class:`ProviderEnum` value to its concrete
+:class:`~wisp.providers.base.BaseProvider` implementation via
+:data:`PROVIDERS_MAP`.
+"""
+
 import enum
 
 from wisp.providers.aws import AWSProvider
@@ -10,6 +17,8 @@ __all__ = ["PROVIDERS_MAP", "AWSProvider", "BaseProvider", "ProviderEnum"]
 
 
 class ProviderEnum(enum.Enum):
+    """Supported cloud providers."""
+
     AWS = "aws"
 
 

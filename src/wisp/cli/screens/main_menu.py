@@ -1,3 +1,5 @@
+"""Main menu screen: entry point with a live configuration summary."""
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Center, Vertical
@@ -6,6 +8,8 @@ from textual.widgets import Button, Footer, Header, Static
 
 
 class MainMenuScreen(Screen):
+    """Landing screen; shows current config and navigates to other screens."""
+
     BINDINGS = [
         Binding("1", "deploy", "Desplegar", show=False),
         Binding("2", "config", "Configuración", show=False),
@@ -53,6 +57,7 @@ class MainMenuScreen(Screen):
         self.update_status()
 
     def update_status(self) -> None:
+        """Refresh the configuration summary widget."""
         try:
             status_widget = self.query_one("#status-preview", Static)
             status_widget.update(self._get_status_text())
@@ -60,6 +65,7 @@ class MainMenuScreen(Screen):
             pass
 
     def _get_status_text(self) -> str:
+        """Build the provider/region/config summary shown on the menu."""
         state = self.app.state  # type: ignore[attr-defined]
         cfg = state.config
         port_str = (

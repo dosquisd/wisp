@@ -1,3 +1,10 @@
+"""Wisp entry point.
+
+Parses command-line arguments and dispatches to either the interactive TUI (no
+subcommand) or a non-interactive command (``deploy``, ``destroy``, ``regions``).
+Exposed as the ``wisp`` console script.
+"""
+
 import argparse
 import enum
 import json
@@ -11,6 +18,8 @@ from wisp.utils.logger import logger
 
 
 class CommandEnum(enum.StrEnum):
+    """Top-level commands accepted by the CLI."""
+
     TUI = "tui"
     DEPLOY = "deploy"
     DESTROY = "destroy"
@@ -18,12 +27,21 @@ class CommandEnum(enum.StrEnum):
 
 
 class RuntimeArgs(TypedDict):
+    """Normalized runtime arguments produced by :func:`parse_args`."""
+
     command: CommandEnum
     provider: ProviderEnum | None
     region: str | None
 
 
 def parse_args() -> RuntimeArgs:
+    """Parse CLI arguments into normalized :class:`RuntimeArgs`.
+
+    Builds subparsers for ``deploy``/``destroy``/``regions`` (each with an
+    optional ``provider`` positional; ``deploy``/``destroy`` also take
+    ``-r/--region``). Command, provider, and region are lowercased; if no
+    subcommand is given, the command defaults to the TUI.
+    """
     parser = argparse.ArgumentParser(description="Wisp CLI")
 
     # Parser for provider argument, which is common to all commands
@@ -90,6 +108,12 @@ def parse_args() -> RuntimeArgs:
 
 
 def main() -> None:
+    """Run Wisp: launch the TUI, or execute a non-interactive command.
+
+    With no subcommand, starts the Textual TUI. Otherwise instantiates the
+    selected provider and runs ``regions``, ``deploy``, or ``destroy``, printing
+    the result and exiting.
+    """
     args = parse_args()
     command = args["command"]
     region = args["region"]

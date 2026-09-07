@@ -1,3 +1,5 @@
+"""Configuration screen: edit the in-memory session :class:`WispConfig`."""
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Center, Horizontal, ScrollableContainer, Vertical
@@ -8,6 +10,8 @@ from wisp.config.settings import WispConfig
 
 
 class ConfigScreen(Screen):
+    """Form to edit session config in memory, with inline validation."""
+
     BINDINGS = [
         Binding("escape", "back", "Volver", show=True),
     ]
@@ -136,6 +140,11 @@ class ConfigScreen(Screen):
             self.action_back()
 
     def save_config(self) -> None:
+        """Validate the form and, if valid, store values into ``AppState``.
+
+        Shows an inline error and returns early if any field is invalid
+        (timeout < 5, port out of ``0-65535``, empty interface/DNS).
+        """
         timeout_raw = self.query_one("#input-ansible-timeout", Input).value.strip()
         port_raw = self.query_one("#input-wireguard-port", Input).value.strip()
         interface = self.query_one("#input-wireguard-interface", Input).value.strip()
@@ -184,6 +193,7 @@ class ConfigScreen(Screen):
         self.app.pop_screen()
 
     def reset_config(self) -> None:
+        """Reset the session config and repopulate the form with defaults."""
         state = self.app.state  # type: ignore[attr-defined]
         state.reset_config()
 

@@ -1,8 +1,18 @@
+"""Typed data structures shared across the application."""
+
 from pathlib import Path
 from typing import TypedDict
 
 
 class InventoryContext(TypedDict):
+    """Variables consumed by the Ansible inventory template
+    (``templates/inventory.ini.j2``).
+
+    Populated during deploy from the Pulumi stack outputs and the active
+    :class:`~wisp.config.settings.WispConfig`, then rendered into
+    ``inventory/inventory.ini``.
+    """
+
     ssh_user: str
     instance_ip: str
     ssh_key_file: str | Path

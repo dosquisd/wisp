@@ -1,3 +1,5 @@
+"""Remote WireGuard server configuration via Ansible."""
+
 import subprocess
 
 from wisp.config.constants import (

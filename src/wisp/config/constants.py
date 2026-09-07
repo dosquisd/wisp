@@ -1,3 +1,10 @@
+"""Project-wide constants: tags, Pulumi identity, filesystem paths, and
+WireGuard defaults.
+
+All paths are derived from :data:`ROOTDIR`, which is resolved from this file's
+location (``src/wisp/config/constants.py`` → three parents up = repo root).
+"""
+
 from pathlib import Path
 
 CREATED_BY_TAG: str = "wisp"
