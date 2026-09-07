@@ -18,11 +18,11 @@ class AppState:
             deployment, if any.
     """
 
-    config: WispConfig = field(default_factory=WispConfig)
+    config: WispConfig = field(default_factory=WispConfig.load)
     provider_name: str = "aws"
     selected_region: str = "us-east-2"
     last_deployment: DeployVMResult | None = None
 
     def reset_config(self) -> None:
-        """Reset :attr:`config` to a fresh :class:`WispConfig` with defaults."""
+        """Reset :attr:`config` to default values."""
         self.config = WispConfig()
