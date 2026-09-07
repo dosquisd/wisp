@@ -16,6 +16,8 @@ def __getattr__(name: str):
 
         return render_inventory_template
 
+    raise AttributeError(f"module {__name__} has no attribute {name}")
+
 
 def get_public_ip() -> str:
     with urlopen("https://api.ipify.org") as response:
