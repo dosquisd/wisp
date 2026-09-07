@@ -1,4 +1,4 @@
-"""Configuration screen: edit the in-memory session :class:`WispConfig`."""
+"""Configuration screen: edit settings with TOML persistence."""
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -6,20 +6,22 @@ from textual.containers import Center, Horizontal, ScrollableContainer, Vertical
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Input, Label, Static, Switch
 
-from wisp.config.settings import WispConfig
+from wisp.config.settings import WispConfig, get_config_file_path
 
 
 class ConfigScreen(Screen):
-    """Form to edit session config in memory, with inline validation."""
+    """Form to edit deployment settings, persisting them to config.toml."""
 
     BINDINGS = [
-        Binding("escape", "back", "Volver", show=True),
+        Binding("escape", "back", "Back", show=True),
+        Binding("ctrl+s", "save", "Save", show=True),
     ]
 
     CSS = """
     #form-container {
-        height: 11;
+        height: 12;
         margin-bottom: 1;
+        padding-right: 1;
     }
 
     #form-container Label {
@@ -54,55 +56,62 @@ class ConfigScreen(Screen):
         text-align: center;
         height: 1;
     }
+
+    .path-hint {
+        color: #64748b;
+        text-align: center;
+        margin-bottom: 1;
+    }
     """
 
     def compose(self) -> ComposeResult:
+        cfg_path = get_config_file_path()
         yield Header(show_clock=True)
         with Center():
             with Vertical(classes="card"):
                 yield Static(
-                    "[bold cyan]Configuración de Sesión[/bold cyan]", classes="title"
+                    "[bold cyan]Wisp Settings[/bold cyan]", classes="cli-brand"
                 )
                 yield Static(
-                    "Modifica los parámetros para los despliegues de esta sesión.",
-                    classes="subtitle",
+                    f"[dim]Persisted to:[/dim] [yellow]{cfg_path}[/yellow]",
+                    classes="path-hint",
                 )
 
                 with ScrollableContainer(id="form-container"):
-                    yield Label("Timeout de Ansible (segundos para boot):")
+                    yield Label("Ansible Boot Timeout (seconds):")
                     yield Input(
                         id="input-ansible-timeout",
                         value=str(self.app.state.config.ansible_timeout),  # type: ignore[attr-defined]
                         type="integer",
                     )
 
-                    yield Label("Puerto WireGuard (0 = aleatorio 49152-65535):")
+                    yield Label("WireGuard Port (0 for dynamic 49152-65535):")
                     yield Input(
                         id="input-wireguard-port",
                         value=str(self.app.state.config.wireguard_port),  # type: ignore[attr-defined]
                         type="integer",
                     )
 
-                    yield Label("Interfaz de WireGuard:")
+                    yield Label("WireGuard Interface:")
                     yield Input(
                         id="input-wireguard-interface",
                         value=self.app.state.config.wireguard_interface,  # type: ignore[attr-defined]
                     )
 
-                    yield Label("DNS Primario:")
+                    yield Label("Primary DNS Server:")
                     yield Input(
                         id="input-dns1",
                         value=self.app.state.config.wireguard_dns1,  # type: ignore[attr-defined]
                     )
 
-                    yield Label("DNS Secundario:")
+                    yield Label("Secondary DNS Server:")
                     yield Input(
                         id="input-dns2",
                         value=self.app.state.config.wireguard_dns2,  # type: ignore[attr-defined]
                     )
 
                     with Horizontal(id="switch-row"):
-                        yield Label("Restringir acceso solo a mi IP pública:")
+                        yield Label("Restrict Firewall to current IP only:")
                         yield Switch(
                             id="switch-force-ip",
                             value=self.app.state.config.force_current_ip,  # type: ignore[attr-defined]
@@ -112,22 +121,19 @@ class ConfigScreen(Screen):
 
                 with Horizontal(classes="btn-group"):
                     yield Button(
-                        "Guardar",
+                        "Save",
                         id="btn-save",
                         variant="primary",
-                        classes="btn-primary",
                     )
                     yield Button(
-                        "Restablecer",
+                        "Defaults",
                         id="btn-reset",
                         variant="default",
-                        classes="btn-secondary",
                     )
                     yield Button(
-                        "Volver",
+                        "Back",
                         id="btn-back",
                         variant="default",
-                        classes="btn-secondary",
                     )
         yield Footer()
 
@@ -139,15 +145,18 @@ class ConfigScreen(Screen):
         elif event.button.id == "btn-back":
             self.action_back()
 
-    def save_config(self) -> None:
-        """Validate the form and, if valid, store values into ``AppState``.
+    def action_save(self) -> None:
+        self.save_config()
 
-        Shows an inline error and returns early if any field is invalid
-        (timeout < 5, port out of ``0-65535``, empty interface/DNS).
-        """
-        timeout_raw = self.query_one("#input-ansible-timeout", Input).value.strip()
+    def save_config(self) -> None:
+        """Validate form inputs, update state, and persist to config.toml."""
+        timeout_raw = (
+            self.query_one("#input-ansible-timeout", Input).value.strip()
+        )
         port_raw = self.query_one("#input-wireguard-port", Input).value.strip()
-        interface = self.query_one("#input-wireguard-interface", Input).value.strip()
+        interface = (
+            self.query_one("#input-wireguard-interface", Input).value.strip()
+        )
         dns1 = self.query_one("#input-dns1", Input).value.strip()
         dns2 = self.query_one("#input-dns2", Input).value.strip()
         force_ip = self.query_one("#switch-force-ip", Switch).value
@@ -157,27 +166,29 @@ class ConfigScreen(Screen):
         try:
             timeout_val = int(timeout_raw)
             if timeout_val < 5:
-                error_label.update("[!] El timeout debe ser de al menos 5 segundos.")
+                error_label.update(
+                    "[!] Boot timeout must be at least 5 seconds."
+                )
                 return
         except ValueError:
-            error_label.update("[!] El timeout debe ser un número entero.")
+            error_label.update("[!] Boot timeout must be an integer.")
             return
 
         try:
             port_val = int(port_raw)
             if port_val < 0 or port_val > 65535:
-                error_label.update("[!] El puerto debe estar entre 0 y 65535.")
+                error_label.update("[!] Port must be between 0 and 65535.")
                 return
         except ValueError:
-            error_label.update("[!] El puerto debe ser un número entero.")
+            error_label.update("[!] Port must be an integer.")
             return
 
         if not interface:
-            error_label.update("[!] La interfaz WireGuard no puede estar vacía.")
+            error_label.update("[!] WireGuard interface cannot be empty.")
             return
 
         if not dns1 or not dns2:
-            error_label.update("[!] Los servidores DNS no pueden estar vacíos.")
+            error_label.update("[!] DNS servers cannot be empty.")
             return
 
         # Update in-memory state
@@ -189,7 +200,10 @@ class ConfigScreen(Screen):
         state.config.wireguard_dns2 = dns2
         state.config.force_current_ip = force_ip
 
-        self.notify("Configuración guardada en memoria", severity="information")
+        # Persist to disk (config.toml)
+        saved_path = state.config.save()
+
+        self.notify(f"Saved configuration to {saved_path.name}", severity="information")
         self.app.pop_screen()
 
     def reset_config(self) -> None:
@@ -209,10 +223,12 @@ class ConfigScreen(Screen):
         )
         self.query_one("#input-dns1", Input).value = default_cfg.wireguard_dns1
         self.query_one("#input-dns2", Input).value = default_cfg.wireguard_dns2
-        self.query_one("#switch-force-ip", Switch).value = default_cfg.force_current_ip
+        self.query_one("#switch-force-ip", Switch).value = (
+            default_cfg.force_current_ip
+        )
 
         self.query_one("#error-message", Static).update("")
-        self.notify("Valores restablecidos por defecto", severity="warning")
+        self.notify("Restored default values", severity="warning")
 
     def action_back(self) -> None:
         self.app.pop_screen()
