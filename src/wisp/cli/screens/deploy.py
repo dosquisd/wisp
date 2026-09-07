@@ -1,4 +1,4 @@
-"""Deploy screen: pick provider and region, review, and launch a deployment."""
+"""Deploy screen: pick provider and region, review, and launch deployment."""
 
 from textual import work
 from textual.app import ComposeResult
@@ -25,10 +25,11 @@ FALLBACK_AWS_REGIONS = [
 
 
 class DeployScreen(Screen):
-    """Provider/region selection with a live deploy summary."""
+    """Provider and region selection wizard with target review."""
 
     BINDINGS = [
-        Binding("escape", "back", "Volver", show=True),
+        Binding("escape", "back", "Back", show=True),
+        Binding("ctrl+d", "start_deploy", "Deploy", show=True),
     ]
 
     CSS = """
@@ -49,8 +50,8 @@ class DeployScreen(Screen):
     }
 
     #deploy-summary {
-        background: #0b0f19;
-        border: solid #334155;
+        background: #090d16;
+        border: solid #1e293b;
         padding: 0 1;
         margin-top: 1;
         margin-bottom: 1;
@@ -73,15 +74,16 @@ class DeployScreen(Screen):
         with Center():
             with Vertical(classes="card"):
                 yield Static(
-                    "[bold cyan]Asistente de Despliegue[/bold cyan]", classes="title"
+                    "[bold cyan]Deploy WireGuard VPN[/bold cyan]",
+                    classes="cli-brand",
                 )
                 yield Static(
-                    "Selecciona el proveedor y la región para la nueva VPN.",
-                    classes="subtitle",
+                    "Select cloud provider and target region to provision an ephemeral VPN.",
+                    classes="cli-tagline",
                 )
 
                 with Vertical(id="deploy-container"):
-                    yield Label("1. Proveedor de Infraestructura:")
+                    yield Label("1. Cloud Provider:")
                     yield Select(
                         options=[("Amazon Web Services (AWS)", "aws")],
                         value="aws",
@@ -89,7 +91,7 @@ class DeployScreen(Screen):
                         id="select-provider",
                     )
 
-                    yield Label("2. Región de Despliegue:")
+                    yield Label("2. Deployment Region:")
                     current_region = self.app.state.selected_region  # type: ignore[attr-defined]
                     regions = (
                         FALLBACK_AWS_REGIONS
@@ -103,27 +105,25 @@ class DeployScreen(Screen):
                         id="select-region",
                     )
                     yield Static(
-                        "[dim]Sincronizando regiones con AWS...[/dim]",
+                        "[dim]Syncing available regions with AWS...[/dim]",
                         id="region-status",
                     )
 
-                    yield Label("3. Resumen y Confirmación:")
+                    yield Label("3. Deployment Target Summary:")
                     yield Static(
                         self._build_summary(current_region), id="deploy-summary"
                     )
 
                 with Horizontal(classes="btn-group"):
                     yield Button(
-                        "Iniciar Despliegue",
+                        "Launch Deployment",
                         id="btn-start-deploy",
                         variant="primary",
-                        classes="btn-primary",
                     )
                     yield Button(
-                        "Cancelar",
+                        "Cancel",
                         id="btn-cancel",
                         variant="default",
-                        classes="btn-secondary",
                     )
         yield Footer()
 
@@ -133,7 +133,9 @@ class DeployScreen(Screen):
     def on_screen_resume(self) -> None:
         region_select = self.query_one("#select-region", Select)
         current = str(region_select.value)
-        self.query_one("#deploy-summary", Static).update(self._build_summary(current))
+        self.query_one("#deploy-summary", Static).update(
+            self._build_summary(current)
+        )
 
     @work(thread=True)
     def fetch_live_regions(self) -> None:
@@ -144,7 +146,9 @@ class DeployScreen(Screen):
             provider = AWSProvider()
             regions = list(provider.get_available_regions())
             if regions:
-                self.app.call_from_thread(self._update_regions_ui, sorted(regions))
+                self.app.call_from_thread(
+                    self._update_regions_ui, sorted(regions)
+                )
         except Exception:
             self.app.call_from_thread(self._region_fetch_failed)
 
@@ -161,7 +165,7 @@ class DeployScreen(Screen):
 
             status = self.query_one("#region-status", Static)
             status.update(
-                f"[green]✓ {len(regions)} regiones disponibles en AWS[/green]"
+                f"[green]✓ {len(regions)} regions available in AWS[/green]"
             )
             self.query_one("#deploy-summary", Static).update(
                 self._build_summary(str(current_val))
@@ -172,12 +176,15 @@ class DeployScreen(Screen):
     def _region_fetch_failed(self) -> None:
         try:
             status = self.query_one("#region-status", Static)
-            status.update("[dim](Usando lista estándar de regiones AWS)[/dim]")
+            status.update("[dim](Using standard AWS regions)[/dim]")
         except Exception:
             pass
 
     def on_select_changed(self, event: Select.Changed) -> None:
-        if event.select.id == "select-region" and event.value is not Select.BLANK:
+        if (
+            event.select.id == "select-region"
+            and event.value is not Select.BLANK
+        ):
             self.query_one("#deploy-summary", Static).update(
                 self._build_summary(str(event.value))
             )
@@ -189,17 +196,17 @@ class DeployScreen(Screen):
         port_text = (
             f"UDP {cfg.wireguard_port}"
             if cfg.wireguard_port > 0
-            else "Aleatorio"
+            else "Dynamic (49152-65535)"
         )
         ip_mode = (
-            "Solo tu IP (/32)"
+            "Current public IP only (/32)"
             if cfg.force_current_ip
-            else "Cualquier IP (0.0.0.0/0)"
+            else "Open (0.0.0.0/0)"
         )
         return (
-            f"[cyan]Destino:[/cyan] AWS ({region})   [cyan]Timeout:[/cyan] {cfg.ansible_timeout}s\n"
-            f"[cyan]Puerto:[/cyan] {port_text}   [cyan]DNS:[/cyan] {cfg.wireguard_dns1}, {cfg.wireguard_dns2}\n"
-            f"[cyan]Firewall:[/cyan] {ip_mode}"
+            f"[dim]PROVIDER[/dim]  AWS (Amazon Web Services)   [dim]REGION[/dim]  [yellow]{region}[/yellow]\n"
+            f"[dim]TIMEOUT[/dim]   {cfg.ansible_timeout}s                      [dim]PORT[/dim]    {port_text}\n"
+            f"[dim]DNS[/dim]       {cfg.wireguard_dns1}, {cfg.wireguard_dns2}      [dim]ACCESS[/dim]  {ip_mode}"
         )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -207,6 +214,9 @@ class DeployScreen(Screen):
             self.start_deployment()
         elif event.button.id == "btn-cancel":
             self.action_back()
+
+    def action_start_deploy(self) -> None:
+        self.start_deployment()
 
     def start_deployment(self) -> None:
         """Persist the selection into state and push the progress screen."""
