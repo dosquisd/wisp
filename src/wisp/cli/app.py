@@ -15,91 +15,148 @@ class WispApp(App):
     mount.
     """
 
-    TITLE = "Wisp"
-    SUB_TITLE = "Ephemeral WireGuard VPNs on your own cloud"
+    TITLE = "wisp"
+    SUB_TITLE = "ephemeral wireguard vpns"
 
     BINDINGS = [
-        Binding("q", "quit", "Salir", show=True),
-        Binding("ctrl+c", "quit", "Salir", show=False),
+        Binding("q", "quit", "Quit", show=True),
+        Binding("ctrl+c", "quit", "Quit", show=False),
     ]
 
     CSS = """
     Screen {
-        background: #0b0f19;
-        color: #f1f5f9;
+        background: #090d16;
+        color: #f8fafc;
         align: center middle;
     }
 
     Header {
-        background: #111827;
+        background: #090d16;
         color: #38bdf8;
         dock: top;
         height: 1;
+        border-bottom: solid #1e293b;
     }
 
     Footer {
-        background: #111827;
+        background: #090d16;
         dock: bottom;
         height: 1;
+        border-top: solid #1e293b;
     }
 
     .card {
-        background: #1e293b;
-        border: round #38bdf8;
+        background: #0f172a;
+        border: round #334155;
         padding: 1 2;
-        width: 74;
+        width: 76;
         height: auto;
-        max-height: 98%;
+        max-height: 96%;
         overflow-y: auto;
     }
 
-    .title {
-        text-style: bold;
+    .card:focus-within {
+        border: round #38bdf8;
+    }
+
+    .cli-brand {
+        text-align: center;
         color: #38bdf8;
-        text-align: center;
+        text-style: bold;
         margin-bottom: 1;
     }
 
-    .subtitle {
-        color: #94a3b8;
+    .cli-tagline {
         text-align: center;
+        color: #64748b;
         margin-bottom: 1;
     }
 
-    .btn-primary {
-        background: #0284c7;
-        color: #ffffff;
+    .status-panel {
+        background: #090d16;
+        border: solid #1e293b;
+        padding: 0 1;
+        margin-bottom: 1;
+    }
+
+    OptionList {
+        background: transparent;
         border: none;
-        width: 100%;
+        height: auto;
+        margin-top: 1;
+        margin-bottom: 1;
+        padding: 0;
+    }
+
+    OptionList:focus {
+        border: none;
+    }
+
+    OptionList > .option-list--option-highlighted {
+        background: #1e293b;
+        color: #38bdf8;
+        text-style: bold;
+    }
+
+    .btn-group {
+        height: 3;
         margin-top: 1;
     }
 
-    .btn-primary:hover {
+    .btn-group Button {
+        margin-right: 1;
+        width: 1fr;
+    }
+
+    Button {
+        background: #1e293b;
+        color: #f8fafc;
+        border: tall #334155;
+        height: 3;
+    }
+
+    Button:hover {
+        background: #334155;
+        border: tall #38bdf8;
+    }
+
+    Button.-primary {
+        background: #0284c7;
+        color: #ffffff;
+        border: tall #38bdf8;
+    }
+
+    Button.-primary:hover {
         background: #0369a1;
     }
 
-    .btn-secondary {
-        background: #334155;
-        color: #f8fafc;
-        border: none;
-        width: 100%;
-        margin-top: 1;
-    }
-
-    .btn-secondary:hover {
-        background: #475569;
-    }
-
-    .btn-danger {
-        background: #dc2626;
+    Button.-error {
+        background: #991b1b;
         color: #ffffff;
-        border: none;
-        width: 100%;
-        margin-top: 1;
+        border: tall #ef4444;
     }
 
-    .btn-danger:hover {
+    Button.-error:hover {
         background: #b91c1c;
+    }
+
+    Input {
+        background: #090d16;
+        border: tall #1e293b;
+        color: #f8fafc;
+    }
+
+    Input:focus {
+        border: tall #38bdf8;
+    }
+
+    Select {
+        background: #090d16;
+        border: tall #1e293b;
+    }
+
+    Select:focus {
+        border: tall #38bdf8;
     }
     """
 
