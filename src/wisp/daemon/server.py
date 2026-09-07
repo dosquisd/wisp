@@ -1,3 +1,11 @@
+"""Privileged local daemon that controls the client-side WireGuard interface.
+
+Runs as root under systemd (``wisp.service``, socket-activated by
+``wisp.socket``). The unprivileged CLI/TUI talks to it over the Unix socket at
+:data:`~wisp.daemon.protocol.SOCKET_PATH`, so it never needs ``sudo`` to bring
+the local tunnel up or down.
+"""
+
 import asyncio
 import subprocess
 from pathlib import Path
@@ -5,15 +13,28 @@ from pathlib import Path
 from wisp.daemon.protocol import SOCKET_PATH, ActionEnum, Request, Response
 from wisp.utils.logger import logger
 
+# Local WireGuard config the daemon writes and manages.
 WG_CONF_PATH = Path("/etc/wireguard/wg0.conf")
 
 
 def _run(cmd: list[str]) -> subprocess.CompletedProcess:
+    """Run a command, raising on non-zero exit, capturing text output."""
     logger.debug(f"[daemon] running: {' '.join(cmd)}")
     return subprocess.run(cmd, check=True, text=True, capture_output=True)
 
 
 async def handle_connect(config_content: str) -> Response:
+    """Write the WireGuard config and bring the ``wg0`` interface up.
+
+    Writes ``config_content`` to :data:`WG_CONF_PATH` with mode ``0600`` and runs
+    ``wg-quick up wg0``.
+
+    Args:
+        config_content (str): The full WireGuard client configuration.
+
+    Returns:
+        Response: ``ok=True`` on success, otherwise the command's stderr.
+    """
     try:
         WG_CONF_PATH.parent.mkdir(parents=True, exist_ok=True)
         WG_CONF_PATH.write_text(config_content)
@@ -25,6 +46,7 @@ async def handle_connect(config_content: str) -> Response:
 
 
 async def handle_disconnect() -> Response:
+    """Bring the ``wg0`` interface down via ``wg-quick down wg0``."""
     try:
         _run(["wg-quick", "down", "wg0"])
         return Response(ok=True, message="disconnected")
@@ -33,11 +55,18 @@ async def handle_disconnect() -> Response:
 
 
 async def handle_status() -> Response:
+    """Return the output of ``wg show wg0`` (``ok`` reflects the exit code)."""
     result = subprocess.run(["wg", "show", "wg0"], capture_output=True, text=True)
     return Response(ok=result.returncode == 0, message=result.stdout)
 
 
 async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    """Serve a single client connection: read one request, reply with one response.
+
+    Reads a newline-delimited :class:`Request`, dispatches to the matching
+    handler, and writes back a :class:`Response`. Unknown actions and unexpected
+    exceptions produce an ``ok=False`` response.
+    """
     try:
         raw = await reader.readline()
         req = Request.decode(raw)
@@ -62,6 +91,12 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
 
 
 async def main() -> None:
+    """Start the asyncio Unix-socket server and serve forever.
+
+    Under systemd socket activation (``LISTEN_FDS`` set) the listening socket is
+    adopted from file descriptor 3; for local development the socket is created
+    directly at :data:`~wisp.daemon.protocol.SOCKET_PATH`.
+    """
     # systemd gives us the socket via socket activation (fd 3),
     # but for local development we also support creating it directly.
     if "LISTEN_FDS" in __import__("os").environ:
@@ -77,6 +112,7 @@ async def main() -> None:
 
 
 def _socket_from_systemd():
+    """Build a socket object from the systemd-provided fd 3 (socket activation)."""
     import socket
 
     return socket.fromfd(3, socket.AF_UNIX, socket.SOCK_STREAM)

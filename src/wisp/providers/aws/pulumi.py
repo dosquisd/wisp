@@ -1,3 +1,11 @@
+"""Pulumi program for the AWS provider.
+
+Defines the infrastructure declared during ``pulumi up``: an EC2 instance, a
+security group opening the WireGuard (UDP) and SSH (TCP 22) ports, and an
+ED25519 key pair used for SSH. Values are surfaced back to the caller via
+``pulumi.export`` outputs.
+"""
+
 import uuid
 
 import pulumi
@@ -14,11 +22,12 @@ from wisp.providers.aws.constants import (
 from wisp.utils import get_public_ip, get_wireguard_port
 from wisp.utils import logger
 
-# Just in case we need to ensure that the AWS plugin is installed for Pulumi automation
+# Guards one-time plugin installation per process.
 _plugins_ready = False
 
 
 def ensure_plugins() -> None:
+    """Install the Pulumi ``aws`` and ``tls`` plugins once per process."""
     global _plugins_ready
     if _plugins_ready:
         return
@@ -33,6 +42,17 @@ def get_ami(
     owners: list[str] | None = None,
     ami_names: list[str] | None = None,
 ) -> aws.ec2.GetAmiResult:
+    """Look up the most recent AMI matching a name filter and owner.
+
+    Args:
+        region (str | None): Region to query (AMIs are region-specific).
+        owners (list[str] | None): AMI owner IDs; defaults to Canonical.
+        ami_names (list[str] | None): AMI name patterns; defaults to the pinned
+            Ubuntu image name.
+
+    Returns:
+        aws.ec2.GetAmiResult: The resolved AMI.
+    """
     if owners is None:
         owners = [DEFAULT_AMI_OWNER]
 
@@ -50,6 +70,12 @@ def get_ami(
 
 
 def get_default_username(ami_name: str) -> str:
+    """Guess the default SSH username from an AMI name.
+
+    Maps common distributions to their cloud default users (Ubuntu ->
+    ``ubuntu``, Amazon Linux -> ``ec2-user``, CentOS -> ``centos``, Debian ->
+    ``admin``), falling back to ``ec2-user``.
+    """
     ami_lower = ami_name.lower()
     if "ubuntu" in ami_lower:
         return "ubuntu"
@@ -71,6 +97,25 @@ def get_security_group(
     wireguard_port: int | None = None,
     cidr_blocks: list[str] | None = None,
 ) -> aws.ec2.SecurityGroup:
+    """Create the security group for the WireGuard VM.
+
+    Opens inbound UDP up to the WireGuard port (the tunnel) and TCP 22 (SSH, for
+    Ansible), and allows all egress. Ingress source is ``<current-ip>/32`` when
+    ``force_current_ip`` is set, otherwise ``0.0.0.0/0``. Missing arguments fall
+    back to sensible defaults (name ``wisp-sg``, a random WireGuard port, etc.).
+
+    Args:
+        region (str | None): Target region.
+        force_current_ip (bool): Restrict ingress to the caller's public IP.
+        name (str | None): Security group name.
+        description (str | None): Security group description.
+        wireguard_port (int | None): UDP port to open; random if ``None``.
+        cidr_blocks (list[str] | None): Explicit ingress CIDRs; computed if
+            ``None``.
+
+    Returns:
+        aws.ec2.SecurityGroup: The created security group resource.
+    """
     if name is None:
         name = "wisp-sg"
         logger.debug(f"No security group name provided, using default '{name}'")
@@ -137,6 +182,27 @@ def create_ec2_instance(
     wireguard_port: int | None = None,
     cidr_blocks: list[str] | None = None,
 ) -> None:
+    """Pulumi program: declare the EC2 instance and its dependencies.
+
+    Creates the security group, generates an ED25519 :class:`tls.PrivateKey` and
+    a matching :class:`aws.ec2.KeyPair`, and launches an
+    :class:`aws.ec2.Instance`. Exports the outputs consumed by the provider:
+    ``instance_id``, ``instance_public_ip``, ``instance_private_ip``,
+    ``instance_private_key``, ``wireguard_port``, and ``ssh_user``.
+
+    Args:
+        region (str): Target region (positional-only).
+        force_current_ip (bool): Restrict the security group to the caller's IP.
+        custom_resource_name (str | None): Instance resource name; a
+            ``wisp-instance-<hex>`` name is generated if ``None``.
+        instance_type (str): EC2 instance type.
+        ami_owners (list[str] | None): AMI owner IDs.
+        ami_names (list[str] | None): AMI name patterns.
+        security_group_name (str | None): Security group name.
+        security_group_description (str | None): Security group description.
+        wireguard_port (int | None): UDP port; random if ``None``.
+        cidr_blocks (list[str] | None): Explicit ingress CIDRs.
+    """
     ensure_plugins()
     if custom_resource_name is None:
         custom_resource_name = f"wisp-instance-{uuid.uuid4().hex[:8]}"

@@ -1,3 +1,5 @@
+"""Deploy screen: pick provider and region, review, and launch a deployment."""
+
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -7,6 +9,7 @@ from textual.widgets import Button, Footer, Header, Label, Select, Static
 
 from wisp.cli.screens.progress import ProgressScreen
 
+# Static region list used until live AWS regions are fetched (or if that fails).
 FALLBACK_AWS_REGIONS = [
     "us-east-1",
     "us-east-2",
@@ -22,6 +25,8 @@ FALLBACK_AWS_REGIONS = [
 
 
 class DeployScreen(Screen):
+    """Provider/region selection with a live deploy summary."""
+
     BINDINGS = [
         Binding("escape", "back", "Volver", show=True),
     ]
@@ -132,6 +137,7 @@ class DeployScreen(Screen):
 
     @work(thread=True)
     def fetch_live_regions(self) -> None:
+        """Fetch live AWS regions in a background thread; fall back on error."""
         try:
             from wisp.providers.aws import AWSProvider
 
@@ -177,6 +183,7 @@ class DeployScreen(Screen):
             )
 
     def _build_summary(self, region: str) -> str:
+        """Build the deployment summary text for the given region."""
         state = self.app.state  # type: ignore[attr-defined]
         cfg = state.config
         port_text = (
@@ -202,6 +209,7 @@ class DeployScreen(Screen):
             self.action_back()
 
     def start_deployment(self) -> None:
+        """Persist the selection into state and push the progress screen."""
         state = self.app.state  # type: ignore[attr-defined]
         provider_val = str(self.query_one("#select-provider", Select).value)
         region_val = str(self.query_one("#select-region", Select).value)

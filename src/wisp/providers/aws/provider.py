@@ -34,12 +34,23 @@ from wisp.wireguard import (
 
 
 class AWSProvider(BaseProvider):
+    """AWS implementation of :class:`~wisp.providers.base.BaseProvider`.
+
+    Uses the Pulumi Automation API to provision/destroy an EC2 instance, Ansible
+    to configure the remote WireGuard server, and the local daemon to connect the
+    client tunnel.
+    """
+
     def __create_pulumi_program(
         self,
         region: str,
         force_current_ip: bool = False,
         wireguard_port: int | None = None,
     ) -> None:
+        """Build the Pulumi program closure passed to the automation stack.
+
+        Treats a non-positive ``wireguard_port`` as "use a random port".
+        """
         create_ec2_instance(
             region,
             force_current_ip=force_current_ip,
@@ -49,6 +60,7 @@ class AWSProvider(BaseProvider):
         )
 
     def get_available_regions(self) -> Sequence[str]:
+        """List enabled AWS regions via ``ec2.describe_regions`` (boto3)."""
         client = boto3.client("ec2", region_name=DEFAULT_REGION)
         return [r["RegionName"] for r in client.describe_regions()["Regions"]]
 
@@ -59,6 +71,25 @@ class AWSProvider(BaseProvider):
         config: WispConfig | None = None,
         on_progress: ProgressCallback | None = None,
     ) -> DeployVMResult:
+        """Provision an EC2 VM, configure WireGuard, and connect the client.
+
+        Runs ``pulumi up``, waits ``config.ansible_timeout`` seconds for boot,
+        writes the SSH/WireGuard private key locally (``0600``), renders the
+        Ansible inventory, runs the playbook against the VM, and finally connects
+        the local WireGuard client via the daemon. See
+        ``docs/deployment-flow.md`` for the full sequence.
+
+        Args:
+            region (str): Target region.
+            force_current_ip (bool): Restrict access to the caller's public IP.
+            config (WispConfig | None): Session config; a default is created if
+                ``None`` (in which case ``force_current_ip`` seeds it).
+            on_progress (ProgressCallback | None): Optional progress callback.
+
+        Returns:
+            DeployVMResult: The deployed instance's id, public/private IP, and
+            WireGuard port.
+        """
         logger.info(f"Deploying VM in region '{region}'...")
 
         if config is None:
@@ -169,6 +200,18 @@ class AWSProvider(BaseProvider):
     def delete_vm(
         self, region: str, on_progress: ProgressCallback | None = None
     ) -> int:
+        """Disconnect the client, destroy the stack, and remove local artifacts.
+
+        Brings the local tunnel down via the daemon, runs ``pulumi destroy``, and
+        deletes the rendered inventory, private key, and client config if present.
+
+        Args:
+            region (str): Region whose stack should be destroyed.
+            on_progress (ProgressCallback | None): Optional progress callback.
+
+        Returns:
+            int: Number of deleted resources (``0`` if the destroy failed).
+        """
         logger.info(f"Deleting VM in region '{region}'...")
 
         logger.debug("Disconnecting WireGuard client...")

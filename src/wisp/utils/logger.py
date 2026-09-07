@@ -8,6 +8,18 @@ log_dir.mkdir(parents=True, exist_ok=True)  # Ensure the log directory exists
 
 
 def setup_logger(name: str) -> logging.Logger:
+    """Configure and return the wisp logger.
+
+    Attaches a rotating file handler at ``logs/wisp.log`` (5 MB per file, 5
+    backups, level ``DEBUG``) and a stderr handler (level ``ERROR``). Propagation
+    is disabled to prevent duplicate records.
+
+    Args:
+        name (str): Logger name.
+
+    Returns:
+        logging.Logger: The configured logger.
+    """
     # Create main logger instance
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)

@@ -1,3 +1,5 @@
+"""Jinja2 rendering of the Ansible inventory template."""
+
 import os
 from pathlib import Path
 

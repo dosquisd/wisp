@@ -1,3 +1,5 @@
+"""Progress screen: runs deploy/destroy in a worker thread and shows results."""
+
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -10,6 +12,12 @@ from wisp.providers.base import DeployVMResult
 
 
 class ProgressScreen(Screen):
+    """Drives a deploy (and optional destroy) and renders live progress.
+
+    Provider calls run in Textual worker threads; UI updates are marshaled back
+    to the UI thread via ``self.app.call_from_thread``.
+    """
+
     BINDINGS = [
         Binding("escape", "back", "Volver", show=True),
     ]
@@ -110,6 +118,7 @@ class ProgressScreen(Screen):
 
     @work(thread=True)
     def run_deployment_worker(self) -> None:
+        """Run ``deploy_vm`` off the UI thread, reporting progress and result."""
         state = self.app.state  # type: ignore[attr-defined]
         provider = AWSProvider()
 
@@ -187,6 +196,7 @@ class ProgressScreen(Screen):
 
     @work(thread=True)
     def run_destruction_worker(self) -> None:
+        """Run ``delete_vm`` off the UI thread, reporting progress and result."""
         state = self.app.state  # type: ignore[attr-defined]
         provider = AWSProvider()
 

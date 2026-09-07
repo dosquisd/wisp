@@ -1,3 +1,5 @@
+"""Root Textual application and global styles for the Wisp TUI."""
+
 from textual.app import App
 from textual.binding import Binding
 
@@ -6,6 +8,13 @@ from wisp.cli.state import AppState
 
 
 class WispApp(App):
+    """The Wisp terminal UI application.
+
+    Owns the shared :class:`~wisp.cli.state.AppState`, defines global CSS and
+    key bindings, and installs the main-menu, config, and deploy screens on
+    mount.
+    """
+
     TITLE = "Wisp"
     SUB_TITLE = "Ephemeral WireGuard VPNs on your own cloud"
 
@@ -99,6 +108,7 @@ class WispApp(App):
         self.state = AppState()
 
     def on_mount(self) -> None:
+        """Install the app screens and show the main menu."""
         self.install_screen(MainMenuScreen(), name="main_menu")
         self.install_screen(ConfigScreen(), name="config")
         self.install_screen(DeployScreen(), name="deploy")

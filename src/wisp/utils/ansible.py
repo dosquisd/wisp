@@ -1,3 +1,5 @@
+"""Resolution of the ``ansible-playbook`` executable."""
+
 import os
 import sys
 from pathlib import Path
