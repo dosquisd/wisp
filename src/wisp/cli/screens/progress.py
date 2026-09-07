@@ -1,4 +1,4 @@
-"""Progress screen: full-bleed pipeline runner with live telemetry stream."""
+"""Progress screen: zero-scroll pipeline runner with live telemetry stream."""
 
 import time
 from datetime import datetime
@@ -15,7 +15,7 @@ from wisp.providers.base import DeployVMResult
 
 
 class ProgressScreen(Screen):
-    """Drives deployment or destruction in a background worker with a live log stream."""
+    """Zero-scroll pipeline runner with live console log stream."""
 
     BINDINGS = [
         Binding("escape", "back", "Back", show=True),
@@ -34,7 +34,7 @@ class ProgressScreen(Screen):
         with Horizontal(classes="app-top-bar"):
             with Horizontal(classes="breadcrumb"):
                 yield Static(
-                    "[bold cyan]wisp[/bold cyan] [dim]›[/dim] [white]deploy pipeline[/white]"
+                    "[bold white]wisp[/bold white] [dim]›[/dim] [dim]deploy pipeline[/dim]"
                 )
             with Horizontal(classes="top-badges"):
                 yield Static(
@@ -44,16 +44,16 @@ class ProgressScreen(Screen):
 
         # Multi-pane split layout
         with Horizontal(classes="split-layout"):
-            # Left Sidebar: Pipeline stages
+            # Left Sidebar (compact 28 chars)
             with Vertical(classes="sidebar"):
                 yield Static("PIPELINE STAGES", classes="sidebar-section-title")
                 with Vertical(id="stages-container"):
                     yield Static(self._build_stages_text(), id="stages-list")
 
                 with Vertical(classes="context-box"):
-                    yield Static("[bold white]DEPLOY SPEC[/bold white]")
+                    yield Static("[dim]DEPLOY SPEC[/dim]")
                     yield Static(
-                        f"[dim]• Cloud:[/dim] [cyan]{state.provider_name.upper()}[/cyan]"
+                        f"[dim]• Cloud:[/dim] [white]{state.provider_name.upper()}[/white]"
                     )
                     yield Static(
                         f"[dim]• Region:[/dim] [yellow]{state.selected_region}[/yellow]"
@@ -61,16 +61,16 @@ class ProgressScreen(Screen):
                     yield Static("[dim]• Instance:[/dim] [white]t3.micro[/white]")
                     yield Static(f"[dim]• Port:[/dim] [white]{port_str}[/white]")
                     yield Static(
-                        f"[dim]• Firewall:[/dim] [white]{'Caller /32' if cfg.force_current_ip else '0.0.0.0/0'}[/white]"
+                        f"[dim]• Access:[/dim] [white]{'Caller /32' if cfg.force_current_ip else 'Open 0.0.0.0/0'}[/white]"
                     )
 
-            # Right Main Workspace: Live telemetry & logs
+            # Right Main Workspace (Zero-Scroll Viewport)
             with Vertical(classes="main-workspace"):
                 # Top Status Card
                 with Vertical(classes="workspace-card", id="progress-top-card"):
                     with Horizontal(classes="card-header-row"):
                         yield Static(
-                            "[bold white]STEP 3/6: PROVISIONING EC2 & FIREWALL RULES[/bold white]",
+                            "[dim]STAGE 3/6: PROVISIONING EC2 & SECURITY GROUP[/dim]",
                             id="progress-step-title",
                         )
                         yield Static(
@@ -84,20 +84,20 @@ class ProgressScreen(Screen):
                         id="progress-status-msg",
                     )
 
-                # Results Box (shown on completion)
+                # Results Box (hidden until completed)
                 with Vertical(classes="workspace-card", id="results-box"):
                     yield Static("", id="results-content")
 
-                # Live Terminal Log Stream
+                # Live Terminal Log Stream Box
                 with Vertical(classes="workspace-card", id="log-card"):
                     with Horizontal(classes="card-header-row"):
-                        yield Static("[bold white]LIVE CONSOLE STREAM[/bold white]")
+                        yield Static("[dim]LIVE CONSOLE STREAM[/dim]")
                         yield Static("[green]AUTO-SCROLL: ON[/green]")
 
                     with ScrollableContainer(id="log-stream-box"):
                         yield Static(self._initial_log_stream(), id="log-content")
 
-                # Action buttons
+                # Action Buttons
                 with Horizontal(classes="btn-group", id="progress-buttons"):
                     yield Button(
                         "Return to Menu (Esc)",
@@ -121,7 +121,7 @@ class ProgressScreen(Screen):
 
     def _initial_log_stream(self) -> str:
         now = datetime.now().strftime("%H:%M:%S")
-        return f"[dim]{now}[/dim] [bold cyan][INFO ][/bold cyan] Initializing Pulumi Automation API workspace (stack: wisp-stack)..."
+        return f"[dim]{now}[/dim] [INFO ] Initializing Pulumi Automation API workspace (stack: wisp-stack)..."
 
     def _update_elapsed_timer(self) -> None:
         try:
@@ -136,36 +136,36 @@ class ProgressScreen(Screen):
 
     def _build_stages_text(self) -> str:
         stage = getattr(self, "current_stage", 3)
-        s1 = "[bold green]✓ 01. Provider Selection[/bold green]\n   [dim]AWS configured[/dim]\n"
-        s2 = "[bold green]✓ 02. Region Resolution[/bold green]\n   [dim]Target zone active[/dim]\n"
+        s1 = "[green]✓[/green] 01. Cloud Provider\n"
+        s2 = "[green]✓[/green] 02. Region Target\n"
 
         if stage < 3:
-            s3 = "[dim]○ 03. VM & Security Group[/dim]\n   [dim]Pulumi Automation API[/dim]\n"
+            s3 = "[dim]○[/dim] 03. VM & Firewall\n"
         elif stage == 3:
-            s3 = "[bold cyan]● 03. VM & Security Group[/bold cyan]\n   [cyan]Pulumi Automation API[/cyan]\n"
+            s3 = "[bold white]● 03. VM & Firewall[/bold white]\n"
         else:
-            s3 = "[bold green]✓ 03. VM & Security Group[/bold green]\n   [dim]Infrastructure created[/dim]\n"
+            s3 = "[green]✓[/green] 03. VM & Firewall\n"
 
         if stage < 4:
-            s4 = "[dim]○ 04. OS Bootstrapping[/dim]\n   [dim]Wait SSH / cloud-init[/dim]\n"
+            s4 = "[dim]○[/dim] 04. Bootstrapping\n"
         elif stage == 4:
-            s4 = "[bold cyan]● 04. OS Bootstrapping[/bold cyan]\n   [cyan]Wait SSH / cloud-init[/cyan]\n"
+            s4 = "[bold white]● 04. Bootstrapping[/bold white]\n"
         else:
-            s4 = "[bold green]✓ 04. OS Bootstrapping[/bold green]\n   [dim]System online[/dim]\n"
+            s4 = "[green]✓[/green] 04. Bootstrapping\n"
 
         if stage < 5:
-            s5 = "[dim]○ 05. Ansible WireGuard[/dim]\n   [dim]Install server & keys[/dim]\n"
+            s5 = "[dim]○[/dim] 05. Ansible Setup\n"
         elif stage == 5:
-            s5 = "[bold cyan]● 05. Ansible WireGuard[/bold cyan]\n   [cyan]Install server & keys[/cyan]\n"
+            s5 = "[bold white]● 05. Ansible Setup[/bold white]\n"
         else:
-            s5 = "[bold green]✓ 05. Ansible WireGuard[/bold green]\n   [dim]WireGuard ready[/dim]\n"
+            s5 = "[green]✓[/green] 05. Ansible Setup\n"
 
         if stage < 6:
-            s6 = "[dim]○ 06. Tunnel Activation[/dim]\n   [dim]Connect via daemon[/dim]"
+            s6 = "[dim]○[/dim] 06. Tunnel Activate"
         elif stage == 6:
-            s6 = "[bold cyan]● 06. Tunnel Activation[/bold cyan]\n   [cyan]Connect via daemon[/cyan]"
+            s6 = "[bold white]● 06. Tunnel Activate[/bold white]"
         else:
-            s6 = "[bold green]✓ 06. Tunnel Activation[/bold green]\n   [dim]Tunnel connected[/dim]"
+            s6 = "[green]✓[/green] 06. Tunnel Activate"
 
         return s1 + s2 + s3 + s4 + s5 + s6
 
@@ -207,11 +207,10 @@ class ProgressScreen(Screen):
                 pbar = self.query_one("#progress-bar", ProgressBar)
                 pbar.progress = min(100, max(0, int(progress * 100)))
 
-            # Append to live log stream
-            log_line = f"[dim]{now}[/dim] [bold cyan][INFO ][/bold cyan] {msg}"
+            log_line = f"[dim]{now}[/dim] [INFO ] {msg}"
             self.logs_history.append(log_line)
             self.query_one("#log-content", Static).update(
-                "\n".join(self.logs_history[-12:])
+                "\n".join(self.logs_history[-8:])
             )
         except Exception:
             pass
@@ -224,17 +223,16 @@ class ProgressScreen(Screen):
         try:
             self.query_one("#stages-list", Static).update(self._build_stages_text())
             self.query_one("#pipeline-top-badge", Static).update(
-                "[bold white on #06281c] ● TUNNEL ACTIVE [/bold white on #06281c]"
+                "[bold white on #18181b] ● TUNNEL ACTIVE [/bold white on #18181b]"
             )
             self.query_one("#progress-bar", ProgressBar).progress = 100
             self.query_one("#progress-step-title", Static).update(
-                "[bold green]✓ PIPELINE COMPLETED: VPN TUNNEL READY[/bold green]"
+                "[bold green]✓ PIPELINE COMPLETED: VPN READY[/bold green]"
             )
             self.query_one("#progress-status-msg", Static).update(
                 "[bold green]All 6 pipeline stages finished successfully.[/bold green]"
             )
 
-            # Show results box
             res_content = (
                 f"[bold green]● CONNECTION ESTABLISHED[/bold green]\n"
                 f"[dim]• Instance ID:[/dim]  [white]{result['instance_id']}[/white]\n"
@@ -252,7 +250,7 @@ class ProgressScreen(Screen):
     def _handle_error(self, error_msg: str) -> None:
         try:
             self.query_one("#pipeline-top-badge", Static).update(
-                "[bold white on #260606] ✗ FAILED [/bold white on #260606]"
+                "[bold white on #7f1d1d] ✗ FAILED [/bold white on #7f1d1d]"
             )
             self.query_one("#progress-step-title", Static).update(
                 "[bold red]✗ PIPELINE FAILED[/bold red]"
@@ -262,11 +260,9 @@ class ProgressScreen(Screen):
             )
 
             now = datetime.now().strftime("%H:%M:%S")
-            self.logs_history.append(
-                f"[dim]{now}[/dim] [bold red][ERROR][/bold red] {error_msg}"
-            )
+            self.logs_history.append(f"[dim]{now}[/dim] [ERROR] {error_msg}")
             self.query_one("#log-content", Static).update(
-                "\n".join(self.logs_history[-12:])
+                "\n".join(self.logs_history[-8:])
             )
 
             self.query_one("#btn-progress-destroy", Button).styles.display = "none"
@@ -315,7 +311,7 @@ class ProgressScreen(Screen):
 
     def start_destruction(self) -> None:
         self.query_one("#pipeline-top-badge", Static).update(
-            "[bold white on #260606] DESTROYING [/bold white on #260606]"
+            "[bold white on #7f1d1d] DESTROYING [/bold white on #7f1d1d]"
         )
         self.query_one("#progress-step-title", Static).update(
             "[bold red]● TEARING DOWN CLOUD RESOURCES[/bold red]"

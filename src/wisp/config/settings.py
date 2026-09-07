@@ -36,6 +36,7 @@ class WispConfig:
         wireguard_dns2 (str): Secondary DNS server pushed to the client.
         wireguard_port (int): UDP port; ``0`` selects a dynamic random port.
         force_current_ip (bool): Restrict access to the caller's public IP (/32).
+        theme (str): UI theme palette ("zinc" or "amber").
     """
 
     ansible_timeout: int = DEFAULT_ANSIBLE_PLAYBOOK_TIMEOUT_SECONDS
@@ -46,6 +47,7 @@ class WispConfig:
     wireguard_dns2: str = WIREGUARD_DNS2
     wireguard_port: int = 0  # 0 indicates dynamic random port (49152-65535)
     force_current_ip: bool = False
+    theme: str = "zinc"  # "zinc" (Monochromatic Zinc) or "amber" (Warm Amber Phosphor)
 
     def to_toml(self) -> str:
         """Serialize configuration to a formatted TOML string."""
@@ -65,7 +67,10 @@ class WispConfig:
             f"port = {self.wireguard_port}\n\n"
             "[security]\n"
             "# Restrict firewall ingress to your current public IP (/32)\n"
-            f"force_current_ip = {'true' if self.force_current_ip else 'false'}\n"
+            f"force_current_ip = {'true' if self.force_current_ip else 'false'}\n\n"
+            "[ui]\n"
+            "# Visual theme palette: 'zinc' (Monochrome) or 'amber' (Warm Phosphor)\n"
+            f'theme = "{self.theme}"\n'
         )
 
     @classmethod
@@ -75,6 +80,7 @@ class WispConfig:
         ansible = data.get("ansible", {})
         wireguard = data.get("wireguard", {})
         security = data.get("security", {})
+        ui = data.get("ui", {})
         return cls(
             ansible_timeout=int(
                 ansible.get("timeout", DEFAULT_ANSIBLE_PLAYBOOK_TIMEOUT_SECONDS)
@@ -86,6 +92,7 @@ class WispConfig:
             wireguard_dns2=str(wireguard.get("dns2", WIREGUARD_DNS2)),
             wireguard_port=int(wireguard.get("port", 0)),
             force_current_ip=bool(security.get("force_current_ip", False)),
+            theme=str(ui.get("theme", "zinc")),
         )
 
     @classmethod
@@ -101,6 +108,7 @@ class WispConfig:
             ansible = data.get("ansible", {})
             wireguard = data.get("wireguard", {})
             security = data.get("security", {})
+            ui = data.get("ui", {})
             return cls(
                 ansible_timeout=int(
                     ansible.get("timeout", DEFAULT_ANSIBLE_PLAYBOOK_TIMEOUT_SECONDS)
@@ -114,6 +122,7 @@ class WispConfig:
                 wireguard_dns2=str(wireguard.get("dns2", WIREGUARD_DNS2)),
                 wireguard_port=int(wireguard.get("port", 0)),
                 force_current_ip=bool(security.get("force_current_ip", False)),
+                theme=str(ui.get("theme", "zinc")),
             )
         except Exception as exc:
             logger.warning(

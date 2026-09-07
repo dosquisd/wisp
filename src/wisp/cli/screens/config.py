@@ -1,8 +1,8 @@
-"""Configuration screen: full-bleed split view with TOML persistence."""
+"""Configuration screen: compact two-column form with theme selector and TOML persistence."""
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, ScrollableContainer, Vertical
+from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import (
     Button,
@@ -11,6 +11,7 @@ from textual.widgets import (
     Input,
     Label,
     OptionList,
+    Select,
     Static,
     Switch,
 )
@@ -20,7 +21,7 @@ from wisp.config.settings import WispConfig, get_config_file_path
 
 
 class ConfigScreen(Screen):
-    """Full-bleed form to edit deployment settings, persisting them to config.toml."""
+    """Compact form to edit deployment parameters, theme, and persistence."""
 
     BINDINGS = [
         Binding("escape", "back", "Back", show=True),
@@ -30,140 +31,120 @@ class ConfigScreen(Screen):
 
     def compose(self) -> ComposeResult:
         cfg_path = get_config_file_path()
+        cfg = self.app.state.config  # type: ignore[attr-defined]
         yield Header(show_clock=True)
 
         # Top breadcrumb bar
         with Horizontal(classes="app-top-bar"):
             with Horizontal(classes="breadcrumb"):
                 yield Static(
-                    "[bold cyan]wisp[/bold cyan] [dim]›[/dim] [white]settings & toml[/white]"
+                    "[bold white]wisp[/bold white] [dim]›[/dim] [dim]settings & toml[/dim]"
                 )
             with Horizontal(classes="top-badges"):
-                yield Static(
-                    "[bold cyan on #10192e] CONFIG.TOML (RW) [/bold cyan on #10192e]"
-                )
+                yield Static("[dim on #18181b] CONFIG.TOML (RW) [/dim on #18181b]")
 
         # Multi-pane split layout
         with Horizontal(classes="split-layout"):
-            # Left Sidebar
+            # Left Sidebar (compact 28 chars)
             with Vertical(classes="sidebar"):
                 yield Static("CATEGORIES", classes="sidebar-section-title")
                 yield OptionList(
-                    Option(
-                        "› [1] Ansible & Boot    Timeouts & boot rules",
-                        id="cat-ansible",
-                    ),
-                    Option("  [2] WireGuard Tunnel  Ports, iface & DNS", id="cat-wg"),
-                    Option("  [3] Security/Firewall IP filtering rules", id="cat-sec"),
+                    Option("› [1] Core Engine", id="cat-1"),
+                    Option("  [2] WireGuard", id="cat-2"),
+                    Option("  [3] Visual Theme", id="cat-3"),
                     id="config-categories",
                 )
 
                 with Vertical(classes="context-box"):
-                    yield Static("[bold white]FILE PERSISTENCE[/bold white]")
-                    yield Static(f"[dim]• Target:[/dim] [cyan]{cfg_path.name}[/cyan]")
-                    yield Static(
-                        "[dim]• Status:[/dim] [green]Valid TOML format[/green]"
-                    )
-                    yield Static("[dim]• Shortcut:[/dim] [white]Ctrl+S to save[/white]")
+                    yield Static("[dim]FILE PERSISTENCE[/dim]")
+                    yield Static(f"[dim]• Path:[/dim] [white]{cfg_path.name}[/white]")
+                    yield Static("[dim]• Format:[/dim] [green]Valid TOML[/green]")
+                    yield Static("[dim]• Action:[/dim] [white]Ctrl+S saves[/white]")
 
-            # Right Main Workspace
+            # Right Main Workspace (Zero-Scroll Viewport)
             with Vertical(classes="main-workspace"):
                 with Vertical(classes="workspace-card"):
                     yield Static(
-                        "[bold white]PARAMETERS CONFIGURATION (config.toml)[/bold white]"
-                    )
-                    yield Static(
-                        "[dim]Values saved here are persisted and loaded automatically across all CLI and TUI sessions.[/dim]"
+                        "[dim]CONFIGURATION PARAMETERS (config.toml)[/dim]",
+                        classes="sidebar-section-title",
                     )
 
-                with ScrollableContainer(classes="main-workspace", id="config-scroll"):
-                    # Field: Ansible timeout
-                    with Vertical(classes="field-card"):
-                        yield Label(
-                            "[bold white]Ansible Boot Timeout (seconds):[/bold white]"
-                        )
-                        yield Input(
-                            id="input-ansible-timeout",
-                            value=str(self.app.state.config.ansible_timeout),  # type: ignore[attr-defined]
-                            type="integer",
-                        )
-                        yield Static(
-                            "[dim]• Time allowed for EC2 cloud-init and sshd socket to become accessible[/dim]"
-                        )
-
-                    # Field: WireGuard port
-                    with Vertical(classes="field-card"):
-                        yield Label(
-                            "[bold white]WireGuard UDP Port (0 for dynamic random 49152-65535):[/bold white]"
-                        )
-                        yield Input(
-                            id="input-wireguard-port",
-                            value=str(self.app.state.config.wireguard_port),  # type: ignore[attr-defined]
-                            type="integer",
-                        )
-                        yield Static(
-                            "[dim]• 0 assigns a cryptographic random high UDP port[/dim]"
-                        )
-
-                    # Field: Interface
-                    with Vertical(classes="field-card"):
-                        yield Label(
-                            "[bold white]WireGuard Interface Name:[/bold white]"
-                        )
-                        yield Input(
-                            id="input-wireguard-interface",
-                            value=self.app.state.config.wireguard_interface,  # type: ignore[attr-defined]
-                        )
-                        yield Static(
-                            "[dim]• Linux kernel wireguard network interface name (wg-quick)[/dim]"
-                        )
-
-                    # Field: Primary DNS
-                    with Vertical(classes="field-card"):
-                        yield Label("[bold white]Primary DNS Resolver:[/bold white]")
-                        yield Input(
-                            id="input-dns1",
-                            value=self.app.state.config.wireguard_dns1,  # type: ignore[attr-defined]
-                        )
-                        yield Static(
-                            "[dim]• Cloudflare privacy DNS resolver pushed to connected clients[/dim]"
-                        )
-
-                    # Field: Secondary DNS
-                    with Vertical(classes="field-card"):
-                        yield Label("[bold white]Secondary DNS Resolver:[/bold white]")
-                        yield Input(
-                            id="input-dns2",
-                            value=self.app.state.config.wireguard_dns2,  # type: ignore[attr-defined]
-                        )
-                        yield Static("[dim]• Cloudflare fallback DNS resolver[/dim]")
-
-                    # Field: Restrict IP
-                    with Vertical(classes="field-card"):
-                        with Horizontal(classes="field-top-row"):
-                            yield Label(
-                                "[bold white]Restrict Firewall Ingress to Caller Public IP (/32):[/bold white]"
+                    # Row 1: Timeout & Port
+                    with Horizontal(classes="grid-2col"):
+                        with Vertical(classes="grid-col"):
+                            yield Label("[dim]Ansible Timeout (seconds):[/dim]")
+                            yield Input(
+                                id="input-ansible-timeout",
+                                value=str(cfg.ansible_timeout),
+                                type="integer",
                             )
-                            yield Switch(
-                                id="switch-force-ip",
-                                value=self.app.state.config.force_current_ip,  # type: ignore[attr-defined]
+
+                        with Vertical(classes="grid-col"):
+                            yield Label("[dim]WireGuard Port (0 = dynamic):[/dim]")
+                            yield Input(
+                                id="input-wireguard-port",
+                                value=str(cfg.wireguard_port),
+                                type="integer",
                             )
-                        yield Static(
-                            "[dim]• When enabled, queries api.ipify.org and locks AWS SecurityGroup exclusively to your IP[/dim]"
+
+                    # Row 2: Interface & Theme Palette
+                    with Horizontal(classes="grid-2col"):
+                        with Vertical(classes="grid-col"):
+                            yield Label("[dim]Interface Name:[/dim]")
+                            yield Input(
+                                id="input-wireguard-interface",
+                                value=cfg.wireguard_interface,
+                            )
+
+                        with Vertical(classes="grid-col"):
+                            yield Label("[dim]Visual Theme Palette:[/dim]")
+                            yield Select(
+                                options=[
+                                    ("Monochromatic Zinc (Default)", "zinc"),
+                                    ("Warm Amber Phosphor", "amber"),
+                                ],
+                                value=getattr(cfg, "theme", "zinc"),
+                                allow_blank=False,
+                                id="select-theme",
+                            )
+
+                    # Row 3: Primary & Secondary DNS
+                    with Horizontal(classes="grid-2col"):
+                        with Vertical(classes="grid-col"):
+                            yield Label("[dim]Primary DNS Resolver:[/dim]")
+                            yield Input(
+                                id="input-dns1",
+                                value=cfg.wireguard_dns1,
+                            )
+
+                        with Vertical(classes="grid-col"):
+                            yield Label("[dim]Secondary DNS Resolver:[/dim]")
+                            yield Input(
+                                id="input-dns2",
+                                value=cfg.wireguard_dns2,
+                            )
+
+                    # Row 4: Restrict IP Switch
+                    with Horizontal(classes="field-top-row"):
+                        yield Label(
+                            "[dim]Restrict Firewall to Caller Public IP (/32):[/dim]"
+                        )
+                        yield Switch(
+                            id="switch-force-ip",
+                            value=cfg.force_current_ip,
                         )
 
-                    yield Static("", id="error-message")
+                yield Static("", id="error-message")
 
-                    with Horizontal(classes="btn-group"):
-                        yield Button(
-                            "Save & Persist (Ctrl+S)", id="btn-save", variant="primary"
-                        )
-                        yield Button(
-                            "Restore Defaults (R)", id="btn-reset", variant="default"
-                        )
-                        yield Button(
-                            "Back to Menu (Esc)", id="btn-back", variant="default"
-                        )
+                # Bottom Action Buttons
+                with Horizontal(classes="btn-group"):
+                    yield Button(
+                        "Save & Persist (Ctrl+S)", id="btn-save", variant="primary"
+                    )
+                    yield Button(
+                        "Restore Defaults (R)", id="btn-reset", variant="default"
+                    )
+                    yield Button("Back to Menu (Esc)", id="btn-back", variant="default")
 
         yield Footer()
 
@@ -192,6 +173,7 @@ class ConfigScreen(Screen):
         dns1 = self.query_one("#input-dns1", Input).value.strip()
         dns2 = self.query_one("#input-dns2", Input).value.strip()
         force_ip = self.query_one("#switch-force-ip", Switch).value
+        theme_val = str(self.query_one("#select-theme", Select).value)
 
         error_label = self.query_one("#error-message", Static)
 
@@ -237,9 +219,14 @@ class ConfigScreen(Screen):
         state.config.wireguard_dns1 = dns1
         state.config.wireguard_dns2 = dns2
         state.config.force_current_ip = force_ip
+        state.config.theme = theme_val
 
         # Persist to disk (config.toml)
         saved_path = state.config.save()
+
+        # Dynamically apply theme to application
+        if hasattr(self.app, "apply_theme"):
+            self.app.apply_theme()
 
         self.notify(f"Saved configuration to {saved_path.name}", severity="information")
         self.app.pop_screen()
@@ -262,6 +249,7 @@ class ConfigScreen(Screen):
         self.query_one("#input-dns1", Input).value = default_cfg.wireguard_dns1
         self.query_one("#input-dns2", Input).value = default_cfg.wireguard_dns2
         self.query_one("#switch-force-ip", Switch).value = default_cfg.force_current_ip
+        self.query_one("#select-theme", Select).value = default_cfg.theme
 
         self.query_one("#error-message", Static).update("")
         self.notify("Restored default configuration", severity="warning")

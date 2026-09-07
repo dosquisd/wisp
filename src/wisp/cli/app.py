@@ -1,4 +1,4 @@
-"""Root Textual application and global full-bleed styles for Wisp CLI."""
+"""Root Textual application and themes for Wisp CLI."""
 
 from textual.app import App
 from textual.binding import Binding
@@ -8,15 +8,10 @@ from wisp.cli.state import AppState
 
 
 class WispApp(App):
-    """The Wisp terminal UI application.
-
-    Owns the shared :class:`~wisp.cli.state.AppState`, defines global CSS and
-    key bindings, and installs the main-menu, config, and deploy screens on
-    mount.
-    """
+    """The Wisp terminal UI application with dual themes (Zinc & Amber)."""
 
     TITLE = "wisp"
-    SUB_TITLE = "ephemeral wireguard vpns on your cloud"
+    SUB_TITLE = "ephemeral wireguard vpns"
 
     BINDINGS = [
         Binding("q", "quit", "Quit", show=True),
@@ -24,9 +19,10 @@ class WispApp(App):
     ]
 
     CSS = """
+    /* =========================================================================
+       BASE LAYOUT (ZERO-SCROLL VIEWPORT)
+       ========================================================================= */
     Screen {
-        background: #090d16;
-        color: #f8fafc;
         layout: vertical;
         padding: 0;
         margin: 0;
@@ -35,26 +31,18 @@ class WispApp(App):
     }
 
     Header {
-        background: #0c101c;
-        color: #38bdf8;
         dock: top;
         height: 1;
-        border-bottom: solid #1e293b;
     }
 
     Footer {
-        background: #0c101c;
         dock: bottom;
         height: 1;
-        border-top: solid #1e293b;
     }
 
-    /* Full-bleed application top bar */
     .app-top-bar {
         height: 3;
         width: 100%;
-        background: #090d16;
-        border-bottom: solid #1e293b;
         layout: horizontal;
         align: left middle;
         padding: 0 2;
@@ -76,59 +64,47 @@ class WispApp(App):
         margin-left: 1;
     }
 
-    /* Full-bleed multi-pane split layout */
     .split-layout {
         layout: horizontal;
         width: 100%;
         height: 1fr;
-        background: #090d16;
     }
 
     .sidebar {
-        width: 36;
-        min-width: 32;
+        width: 28;
+        min-width: 26;
         height: 100%;
         layout: vertical;
-        background: #0a0e19;
-        border-right: solid #1e293b;
-        padding: 1 2;
-        overflow-y: auto;
+        padding: 1 1;
+        overflow-y: hidden;
     }
 
     .main-workspace {
         width: 1fr;
         height: 100%;
         layout: vertical;
-        background: #0e1424;
         padding: 1 2;
-        overflow-y: auto;
+        overflow-y: hidden;
     }
 
-    /* Section headers */
     .sidebar-section-title {
-        color: #64748b;
         text-style: bold;
-        margin-top: 1;
+        margin-top: 0;
         margin-bottom: 1;
     }
 
-    /* Status panel & context box */
     .context-box {
-        background: #0c111e;
-        border: solid #1e293b;
         padding: 1;
         margin-top: 1;
         layout: vertical;
     }
 
     .context-box Static {
-        margin-bottom: 1;
+        margin-bottom: 0;
     }
 
     /* Cards inside workspace */
     .workspace-card {
-        background: #131b2e;
-        border: solid #1e293b;
         padding: 1 2;
         margin-bottom: 1;
         layout: vertical;
@@ -149,13 +125,11 @@ class WispApp(App):
     .metric-row {
         layout: horizontal;
         width: 100%;
-        margin-top: 1;
+        margin-top: 0;
         margin-bottom: 1;
     }
 
     .metric-chip {
-        background: #090d18;
-        border: solid #1e293b;
         padding: 1;
         width: 1fr;
         height: auto;
@@ -176,10 +150,20 @@ class WispApp(App):
         height: auto;
     }
 
-    /* Highlighted callout action box */
+    .grid-3col {
+        layout: horizontal;
+        width: 100%;
+        height: auto;
+    }
+
+    .grid-col3 {
+        width: 1fr;
+        layout: vertical;
+        margin-right: 1;
+        height: auto;
+    }
+
     .callout-action-box {
-        background: #0a1c29;
-        border: solid #38bdf8;
         padding: 0 2;
         margin-top: 1;
         layout: horizontal;
@@ -196,7 +180,6 @@ class WispApp(App):
         width: auto;
     }
 
-    /* OptionList navigation */
     OptionList {
         background: transparent;
         border: none;
@@ -209,50 +192,8 @@ class WispApp(App):
         border: none;
     }
 
-    OptionList > .option-list--option-highlighted {
-        background: #152238;
-        color: #38bdf8;
-        text-style: bold;
-    }
-
-    /* Badges */
-    .badge-green {
-        background: #06281c;
-        color: #10b981;
-        border: solid #10b981;
-        padding: 0 1;
-        text-style: bold;
-    }
-
-    .badge-cyan {
-        background: #10192e;
-        color: #38bdf8;
-        border: solid #38bdf8;
-        padding: 0 1;
-        text-style: bold;
-    }
-
-    .badge-amber {
-        background: #261c06;
-        color: #f59e0b;
-        border: solid #f59e0b;
-        padding: 0 1;
-        text-style: bold;
-    }
-
-    .badge-red {
-        background: #260606;
-        color: #ef4444;
-        border: solid #ef4444;
-        padding: 0 1;
-        text-style: bold;
-    }
-
-    /* Form styling */
     .field-card {
-        background: #0b101c;
-        border: solid #1e293b;
-        padding: 1 2;
+        padding: 1;
         margin-bottom: 1;
         layout: vertical;
         height: auto;
@@ -277,60 +218,244 @@ class WispApp(App):
     }
 
     Button {
-        background: #1e293b;
-        color: #f8fafc;
-        border: tall #334155;
         height: 3;
-    }
-
-    Button:hover {
-        background: #334155;
-        border: tall #38bdf8;
-    }
-
-    Button.-primary {
-        background: #0284c7;
-        color: #ffffff;
-        border: tall #38bdf8;
-    }
-
-    Button.-primary:hover {
-        background: #0369a1;
-    }
-
-    Button.-error {
-        background: #991b1b;
-        color: #ffffff;
-        border: tall #ef4444;
-    }
-
-    Button.-error:hover {
-        background: #b91c1c;
-    }
-
-    Input {
-        background: #090d16;
-        border: tall #1e293b;
-        color: #f8fafc;
-    }
-
-    Input:focus {
-        border: tall #38bdf8;
-    }
-
-    Select {
-        background: #090d16;
-        border: tall #1e293b;
-    }
-
-    Select:focus {
-        border: tall #38bdf8;
     }
 
     ProgressBar {
         width: 100%;
         margin-top: 1;
         margin-bottom: 1;
+    }
+
+    /* =========================================================================
+       THEME: MONOCHROMATIC ZINC (DEFAULT)
+       ========================================================================= */
+    Screen, .theme-zinc Screen {
+        background: #0c0c0e;
+        color: #f4f4f5;
+    }
+
+    Header, .theme-zinc Header {
+        background: #111114;
+        color: #e4e4e7;
+        border-bottom: solid #27272a;
+    }
+
+    Footer, .theme-zinc Footer {
+        background: #111114;
+        color: #a1a1aa;
+        border-top: solid #27272a;
+    }
+
+    .app-top-bar, .theme-zinc .app-top-bar {
+        background: #0c0c0e;
+        border-bottom: solid #27272a;
+    }
+
+    .sidebar, .theme-zinc .sidebar {
+        background: #111114;
+        border-right: solid #27272a;
+    }
+
+    .sidebar-section-title, .theme-zinc .sidebar-section-title {
+        color: #52525b;
+    }
+
+    .main-workspace, .theme-zinc .main-workspace {
+        background: #0c0c0e;
+    }
+
+    .workspace-card, .theme-zinc .workspace-card {
+        background: #141418;
+        border: solid #27272a;
+    }
+
+    .context-box, .theme-zinc .context-box {
+        background: #16161a;
+        border: solid #27272a;
+    }
+
+    .metric-chip, .theme-zinc .metric-chip {
+        background: #111114;
+        border: solid #27272a;
+    }
+
+    .callout-action-box, .theme-zinc .callout-action-box {
+        background: #18181b;
+        border: solid #3f3f46;
+    }
+
+    OptionList > .option-list--option-highlighted,
+    .theme-zinc OptionList > .option-list--option-highlighted {
+        background: #27272a;
+        color: #ffffff;
+        text-style: bold;
+    }
+
+    .field-card, .theme-zinc .field-card {
+        background: #141418;
+        border: solid #27272a;
+    }
+
+    Input, .theme-zinc Input {
+        background: #111114;
+        border: tall #27272a;
+        color: #f4f4f5;
+    }
+
+    Input:focus, .theme-zinc Input:focus {
+        border: tall #71717a;
+    }
+
+    Select, .theme-zinc Select {
+        background: #111114;
+        border: tall #27272a;
+    }
+
+    Select:focus, .theme-zinc Select:focus {
+        border: tall #71717a;
+    }
+
+    Button, .theme-zinc Button {
+        background: #27272a;
+        color: #f4f4f5;
+        border: tall #3f3f46;
+    }
+
+    Button:hover, .theme-zinc Button:hover {
+        background: #3f3f46;
+        border: tall #71717a;
+    }
+
+    Button.-primary, .theme-zinc Button.-primary {
+        background: #3f3f46;
+        color: #ffffff;
+        border: tall #a1a1aa;
+    }
+
+    Button.-primary:hover, .theme-zinc Button.-primary:hover {
+        background: #52525b;
+    }
+
+    Button.-error, .theme-zinc Button.-error {
+        background: #7f1d1d;
+        color: #ffffff;
+        border: tall #ef4444;
+    }
+
+    /* =========================================================================
+       THEME: WARM AMBER PHOSPHOR
+       ========================================================================= */
+    .theme-amber Screen {
+        background: #0a0b0e;
+        color: #fef3c7;
+    }
+
+    .theme-amber Header {
+        background: #0f1117;
+        color: #f59e0b;
+        border-bottom: solid #222634;
+    }
+
+    .theme-amber Footer {
+        background: #0f1117;
+        color: #9ca3af;
+        border-top: solid #222634;
+    }
+
+    .theme-amber .app-top-bar {
+        background: #0a0b0e;
+        border-bottom: solid #222634;
+    }
+
+    .theme-amber .sidebar {
+        background: #0f1117;
+        border-right: solid #222634;
+    }
+
+    .theme-amber .sidebar-section-title {
+        color: #4b5563;
+    }
+
+    .theme-amber .main-workspace {
+        background: #0a0b0e;
+    }
+
+    .theme-amber .workspace-card {
+        background: #141722;
+        border: solid #222634;
+    }
+
+    .theme-amber .context-box {
+        background: #141722;
+        border: solid #222634;
+    }
+
+    .theme-amber .metric-chip {
+        background: #121318;
+        border: solid #222634;
+    }
+
+    .theme-amber .callout-action-box {
+        background: #201402;
+        border: solid #92400e;
+    }
+
+    .theme-amber OptionList > .option-list--option-highlighted {
+        background: #291b04;
+        color: #f59e0b;
+        text-style: bold;
+    }
+
+    .theme-amber .field-card {
+        background: #141722;
+        border: solid #222634;
+    }
+
+    .theme-amber Input {
+        background: #0f1117;
+        border: tall #222634;
+        color: #fef3c7;
+    }
+
+    .theme-amber Input:focus {
+        border: tall #f59e0b;
+    }
+
+    .theme-amber Select {
+        background: #0f1117;
+        border: tall #222634;
+    }
+
+    .theme-amber Select:focus {
+        border: tall #f59e0b;
+    }
+
+    .theme-amber Button {
+        background: #1c1304;
+        color: #f59e0b;
+        border: tall #78350f;
+    }
+
+    .theme-amber Button:hover {
+        background: #291b04;
+        border: tall #f59e0b;
+    }
+
+    .theme-amber Button.-primary {
+        background: #f59e0b;
+        color: #1c1102;
+        border: tall #fbbf24;
+    }
+
+    .theme-amber Button.-primary:hover {
+        background: #d97706;
+    }
+
+    .theme-amber Button.-error {
+        background: #7f1d1d;
+        color: #ffffff;
+        border: tall #ef4444;
     }
     """
 
@@ -339,8 +464,19 @@ class WispApp(App):
         self.state = AppState()
 
     def on_mount(self) -> None:
-        """Install the app screens and show the main menu."""
+        """Install screens and apply the configured visual theme."""
+        self.apply_theme()
         self.install_screen(MainMenuScreen(), name="main_menu")
         self.install_screen(ConfigScreen(), name="config")
         self.install_screen(DeployScreen(), name="deploy")
         self.push_screen("main_menu")
+
+    def apply_theme(self) -> None:
+        """Apply theme class to root app based on state."""
+        theme = getattr(self.state.config, "theme", "zinc")
+        if theme == "amber":
+            self.remove_class("theme-zinc")
+            self.add_class("theme-amber")
+        else:
+            self.remove_class("theme-amber")
+            self.add_class("theme-zinc")

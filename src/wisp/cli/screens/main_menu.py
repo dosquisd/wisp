@@ -1,4 +1,4 @@
-"""Main menu screen: full-bleed dashboard with multi-pane sidebar and workspace."""
+"""Main menu screen: zero-scroll compact dashboard with dual-pane layout."""
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -9,7 +9,7 @@ from textual.widgets.option_list import Option
 
 
 class MainMenuScreen(Screen):
-    """Full-bleed landing screen with sidebar navigation and cloud telemetry."""
+    """Full-bleed landing screen with zero-scroll compact layout."""
 
     BINDINGS = [
         Binding("1", "deploy", "Deploy", show=False),
@@ -24,100 +24,79 @@ class MainMenuScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
 
-        # App top bar with breadcrumbs and live badges
+        # App top bar
         with Horizontal(classes="app-top-bar"):
             with Horizontal(classes="breadcrumb"):
                 yield Static(
-                    "[bold cyan]wisp[/bold cyan] [dim]›[/dim] [white]overview[/white]"
+                    "[bold white]wisp[/bold white] [dim]›[/dim] [dim]overview[/dim]"
                 )
-            with Horizontal(classes="top-badges", id="top-badges-container"):
+            with Horizontal(classes="top-badges"):
                 yield Static(self._get_daemon_badge())
                 yield Static(self._get_cloud_badge(), id="cloud-badge")
 
-        # Multi-pane full-bleed split layout
+        # Multi-pane split layout
         with Horizontal(classes="split-layout"):
-            # Left Sidebar
+            # Left Sidebar (compact 28 chars)
             with Vertical(classes="sidebar"):
                 yield Static("NAVIGATION", classes="sidebar-section-title")
                 yield OptionList(
-                    Option(
-                        "› [1] Deploy VPN       Launch cloud VM tunnel", id="deploy"
-                    ),
-                    Option("  [2] Settings         Edit config.toml", id="config"),
-                    Option(
-                        "  [3] Telemetry        View connection info", id="telemetry"
-                    ),
-                    Option("  [4] Teardown         Destroy active stack", id="destroy"),
-                    Option("  [5] Quit             Exit session", id="quit"),
+                    Option("› [1] Deploy VPN", id="deploy"),
+                    Option("  [2] Settings", id="config"),
+                    Option("  [3] Telemetry", id="telemetry"),
+                    Option("  [4] Teardown", id="destroy"),
+                    Option("  [5] Quit", id="quit"),
                     id="menu-options",
                 )
 
                 with Vertical(classes="context-box"):
-                    yield Static("[bold white]SYSTEM HEALTH[/bold white]")
-                    yield Static(
-                        "[dim]• Daemon Socket:[/dim] [green]/run/wisp.sock[/green]"
-                    )
-                    yield Static("[dim]• WireGuard Tool:[/dim] [green]wg-quick[/green]")
-                    yield Static(
-                        "[dim]• Config Target:[/dim] [cyan]config.toml (user)[/cyan]"
-                    )
-                    yield Static(
-                        "[dim]• Privileges:[/dim] [green]Unprivileged (safe)[/green]"
-                    )
+                    yield Static("[dim]SYSTEM CONTEXT[/dim]")
+                    yield Static("[dim]• Daemon:[/dim] [green]/run/wisp.sock[/green]")
+                    yield Static("[dim]• Tool:[/dim] [green]wg-quick[/green]")
+                    yield Static("[dim]• Config:[/dim] [white]config.toml[/white]")
+                    yield Static("[dim]• Privs:[/dim] [green]Unprivileged[/green]")
 
-            # Right Main Workspace
+            # Right Main Workspace (Zero-Scroll Viewport)
             with Vertical(classes="main-workspace"):
-                # Active Tunnel Card
-                with Vertical(classes="workspace-card"):
-                    with Horizontal(classes="card-header-row"):
+                # Top Row: Split in 2 columns (Status & Specs)
+                with Horizontal(classes="grid-2col"):
+                    with Vertical(classes="workspace-card"):
                         yield Static(
-                            "[bold white]ACTIVE TUNNEL & CLOUD OVERVIEW[/bold white]"
+                            "[dim]ACTIVE TUNNEL STATUS[/dim]",
+                            classes="sidebar-section-title",
                         )
                         yield Static(
-                            self._get_tunnel_status_badge(), id="tunnel-status-badge"
+                            self._get_tunnel_status_text(), id="tunnel-status-text"
                         )
 
-                    with Horizontal(classes="metric-row"):
-                        with Vertical(classes="metric-chip"):
-                            yield Static("[dim]TARGET CLOUD[/dim]")
-                            yield Static("[bold cyan]AWS (EC2)[/bold cyan]")
-                            yield Static("[dim]Ubuntu Noble 24.04[/dim]")
+                    with Vertical(classes="workspace-card"):
+                        yield Static(
+                            "[dim]INFRASTRUCTURE SPEC[/dim]",
+                            classes="sidebar-section-title",
+                        )
+                        yield Static(self._get_infra_spec_text(), id="infra-spec-text")
 
-                        with Vertical(classes="metric-chip"):
-                            yield Static("[dim]REGION[/dim]")
-                            yield Static(self._get_region_chip(), id="metric-region")
-                            yield Static("[dim]Low latency pool[/dim]")
-
-                        with Vertical(classes="metric-chip"):
-                            yield Static("[dim]INSTANCE[/dim]")
-                            yield Static("[bold cyan]t3.micro[/bold cyan]")
-                            yield Static("[dim]~$0.0104 / hr[/dim]")
-
-                        with Vertical(classes="metric-chip"):
-                            yield Static("[dim]ENCRYPTION[/dim]")
-                            yield Static("[bold cyan]ChaCha20-Poly1305[/bold cyan]")
-                            yield Static("[dim]Noise_IKpsk2[/dim]")
-
-                # Active Settings Card
+                # Middle Row: Compact 3-Column Configuration Matrix
                 with Vertical(classes="workspace-card"):
                     yield Static(
-                        "[bold white]ACTIVE SESSION SETTINGS (config.toml)[/bold white]",
-                        classes="card-header-row",
+                        "[dim]SESSION CONFIGURATION (config.toml)[/dim]",
+                        classes="sidebar-section-title",
                     )
-                    with Horizontal(classes="grid-2col"):
-                        with Vertical(classes="grid-col", id="cfg-col-1"):
+                    with Horizontal(classes="grid-3col"):
+                        with Vertical(classes="grid-col3", id="cfg-col-1"):
                             yield Static(self._get_cfg_col1())
-                        with Vertical(classes="grid-col", id="cfg-col-2"):
+                        with Vertical(classes="grid-col3", id="cfg-col-2"):
                             yield Static(self._get_cfg_col2())
+                        with Vertical(classes="grid-col3", id="cfg-col-3"):
+                            yield Static(self._get_cfg_col3())
 
-                # Quick Callout Action Box
+                # Bottom Row: Clean Callout Action Bar
                 with Horizontal(classes="callout-action-box"):
                     yield Static(
-                        "[bold cyan]›[/bold cyan] [bold white]Press [1] or Enter to launch an ephemeral cloud VPN now[/bold white]",
+                        "[bold white]› Press [1] or Enter to launch ephemeral cloud VPN[/bold white]",
                         classes="callout-text",
                     )
                     yield Static(
-                        "[bold black on cyan] ENTER ↵ [/bold black on cyan]",
+                        "[bold white on #27272a] ENTER ↵ [/bold white on #27272a]",
                         classes="callout-key",
                     )
 
@@ -131,60 +110,71 @@ class MainMenuScreen(Screen):
         self.query_one("#menu-options", OptionList).focus()
 
     def refresh_all_panels(self) -> None:
-        """Update all live dynamic badges and chips."""
+        """Refresh all live text widgets."""
         try:
             self.query_one("#cloud-badge", Static).update(self._get_cloud_badge())
-            self.query_one("#tunnel-status-badge", Static).update(
-                self._get_tunnel_status_badge()
+            self.query_one("#tunnel-status-text", Static).update(
+                self._get_tunnel_status_text()
             )
-            self.query_one("#metric-region", Static).update(self._get_region_chip())
+            self.query_one("#infra-spec-text", Static).update(
+                self._get_infra_spec_text()
+            )
             self.query_one("#cfg-col-1", Vertical).query_one(Static).update(
                 self._get_cfg_col1()
             )
             self.query_one("#cfg-col-2", Vertical).query_one(Static).update(
                 self._get_cfg_col2()
             )
+            self.query_one("#cfg-col-3", Vertical).query_one(Static).update(
+                self._get_cfg_col3()
+            )
         except Exception:
             pass
 
     def _get_daemon_badge(self) -> str:
-        return "[bold white on #06281c] ● DAEMON: ACTIVE [/bold white on #06281c]"
+        return "[bold white on #18181b] ● DAEMON READY [/bold white on #18181b]"
 
     def _get_cloud_badge(self) -> str:
         state = self.app.state  # type: ignore[attr-defined]
-        return f"[bold cyan on #10192e] AWS: {state.selected_region} [/bold cyan on #10192e]"
+        return f"[dim on #18181b] AWS: {state.selected_region} [/dim on #18181b]"
 
-    def _get_tunnel_status_badge(self) -> str:
+    def _get_tunnel_status_text(self) -> str:
         state = self.app.state  # type: ignore[attr-defined]
         if state.last_deployment:
-            return f"[bold white on #06281c] ● ACTIVE (IP: {state.last_deployment['public_ip']}) [/bold white on #06281c]"
-        return "[bold green on #182216] ● READY • STANDBY [/bold green on #182216]"
+            return (
+                f"[dim]Status:[/dim]   [bold green]● ACTIVE[/bold green]\n"
+                f"[dim]IP:[/dim]       [yellow]{state.last_deployment['public_ip']}[/yellow]\n"
+                f"[dim]Machine:[/dim]  [white]{state.last_deployment['instance_id']}[/white]"
+            )
+        return (
+            "[dim]Status:[/dim]   [bold green]● STANDBY (Ready)[/bold green]\n"
+            "[dim]IP:[/dim]       [dim]None (disposable on demand)[/dim]\n"
+            "[dim]Est Cost:[/dim] [white]$0.00 (pay-per-use)[/white]"
+        )
 
-    def _get_region_chip(self) -> str:
+    def _get_infra_spec_text(self) -> str:
         state = self.app.state  # type: ignore[attr-defined]
-        return f"[bold cyan]{state.selected_region}[/bold cyan]"
+        return (
+            f"[dim]Cloud:[/dim]    [white]AWS (Amazon EC2)[/white]\n"
+            f"[dim]Region:[/dim]   [white]{state.selected_region}[/white]\n"
+            f"[dim]VM Type:[/dim]  [white]t3.micro (Ubuntu 24.04)[/white]"
+        )
 
     def _get_cfg_col1(self) -> str:
         cfg = self.app.state.config  # type: ignore[attr-defined]
         port_str = (
-            f"UDP {cfg.wireguard_port}"
-            if cfg.wireguard_port > 0
-            else "Dynamic random (49152-65535)"
+            f"UDP {cfg.wireguard_port}" if cfg.wireguard_port > 0 else "Dynamic UDP"
         )
-        ip_mode = "Restricted (/32)" if cfg.force_current_ip else "Open (0.0.0.0/0)"
-        return (
-            f"[dim]Interface:[/dim]       [white]{cfg.wireguard_interface}[/white]\n"
-            f"[dim]WireGuard Port:[/dim]  [white]{port_str}[/white]\n"
-            f"[dim]Firewall Rule:[/dim]   [white]{ip_mode}[/white]"
-        )
+        return f"[dim]Interface:[/dim] [white]{cfg.wireguard_interface}[/white]\n[dim]Port:[/dim]      [white]{port_str}[/white]"
 
     def _get_cfg_col2(self) -> str:
         cfg = self.app.state.config  # type: ignore[attr-defined]
-        return (
-            f"[dim]Ansible Timeout:[/dim] [white]{cfg.ansible_timeout} seconds[/white]\n"
-            f"[dim]DNS Resolvers:[/dim]   [white]{cfg.wireguard_dns1}, {cfg.wireguard_dns2}[/white]\n"
-            f"[dim]Tunnel Routing:[/dim]  [white]Full Tunnel (all traffic via VPN)[/white]"
-        )
+        ip_mode = "Restricted (/32)" if cfg.force_current_ip else "Open (0.0.0.0/0)"
+        return f"[dim]Timeout:[/dim]   [white]{cfg.ansible_timeout}s[/white]\n[dim]Firewall:[/dim]  [white]{ip_mode}[/white]"
+
+    def _get_cfg_col3(self) -> str:
+        cfg = self.app.state.config  # type: ignore[attr-defined]
+        return f"[dim]DNS:[/dim]       [white]{cfg.wireguard_dns1}, {cfg.wireguard_dns2}[/white]\n[dim]Routing:[/dim]   [white]Full Tunnel[/white]"
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         if event.option_id == "deploy":
