@@ -1,15 +1,15 @@
-"""Deploy screen: pick provider and region, review, and launch deployment."""
+"""Deploy screen: full-bleed wizard to select provider/region and launch."""
 
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Center, Horizontal, Vertical
+from textual.containers import Horizontal, ScrollableContainer, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Label, Select, Static
+from textual.widgets import Button, Footer, Header, Label, OptionList, Select, Static
+from textual.widgets.option_list import Option
 
 from wisp.cli.screens.progress import ProgressScreen
 
-# Static region list used until live AWS regions are fetched (or if that fails).
 FALLBACK_AWS_REGIONS = [
     "us-east-1",
     "us-east-2",
@@ -25,106 +25,114 @@ FALLBACK_AWS_REGIONS = [
 
 
 class DeployScreen(Screen):
-    """Provider and region selection wizard with target review."""
+    """Full-bleed provider and region selection wizard with target review."""
 
     BINDINGS = [
         Binding("escape", "back", "Back", show=True),
         Binding("ctrl+d", "start_deploy", "Deploy", show=True),
     ]
 
-    CSS = """
-    #deploy-container {
-        height: auto;
-        margin-bottom: 1;
-    }
-
-    #deploy-container Label {
-        color: #94a3b8;
-        margin-top: 1;
-    }
-
-    #region-status {
-        height: 1;
-        margin-top: 0;
-        margin-bottom: 1;
-    }
-
-    #deploy-summary {
-        background: #090d16;
-        border: solid #1e293b;
-        padding: 0 1;
-        margin-top: 1;
-        margin-bottom: 1;
-        height: auto;
-    }
-
-    .btn-group {
-        height: 3;
-        margin-top: 1;
-    }
-
-    .btn-group Button {
-        margin-right: 1;
-        width: 1fr;
-    }
-    """
-
     def compose(self) -> ComposeResult:
+        current_region = self.app.state.selected_region  # type: ignore[attr-defined]
         yield Header(show_clock=True)
-        with Center():
-            with Vertical(classes="card"):
+
+        # Top breadcrumb bar
+        with Horizontal(classes="app-top-bar"):
+            with Horizontal(classes="breadcrumb"):
                 yield Static(
-                    "[bold cyan]Deploy WireGuard VPN[/bold cyan]",
-                    classes="cli-brand",
+                    "[bold cyan]wisp[/bold cyan] [dim]›[/dim] [white]deploy wizard[/white]"
                 )
+            with Horizontal(classes="top-badges"):
                 yield Static(
-                    "Select cloud provider and target region to provision an ephemeral VPN.",
-                    classes="cli-tagline",
+                    f"[bold cyan on #10192e] TARGET: {current_region} [/bold cyan on #10192e]",
+                    id="top-region-badge",
                 )
 
-                with Vertical(id="deploy-container"):
-                    yield Label("1. Cloud Provider:")
-                    yield Select(
-                        options=[("Amazon Web Services (AWS)", "aws")],
-                        value="aws",
-                        allow_blank=False,
-                        id="select-provider",
-                    )
+        # Multi-pane split layout
+        with Horizontal(classes="split-layout"):
+            # Left Sidebar
+            with Vertical(classes="sidebar"):
+                yield Static("WIZARD STEPS", classes="sidebar-section-title")
+                yield OptionList(
+                    Option("✓ 01. Cloud Provider   AWS configured", id="step-1"),
+                    Option("› 02. Region Target    Select zone", id="step-2"),
+                    Option("  03. Launch Review    Confirm deployment", id="step-3"),
+                    id="wizard-steps",
+                )
 
-                    yield Label("2. Deployment Region:")
-                    current_region = self.app.state.selected_region  # type: ignore[attr-defined]
-                    regions = (
-                        FALLBACK_AWS_REGIONS
-                        if current_region in FALLBACK_AWS_REGIONS
-                        else [current_region, *FALLBACK_AWS_REGIONS]
-                    )
-                    yield Select(
-                        options=[(r, r) for r in regions],
-                        value=current_region,
-                        allow_blank=False,
-                        id="select-region",
+                with Vertical(classes="context-box"):
+                    yield Static("[bold white]DEPLOY SPEC[/bold white]")
+                    yield Static(
+                        "[dim]• Cloud:[/dim] [cyan]AWS (Amazon Web Services)[/cyan]"
                     )
                     yield Static(
-                        "[dim]Syncing available regions with AWS...[/dim]",
-                        id="region-status",
+                        "[dim]• Machine:[/dim] [white]t3.micro (Ubuntu 24.04)[/white]"
                     )
-
-                    yield Label("3. Deployment Target Summary:")
+                    yield Static("[dim]• Cost:[/dim] [green]~$0.0104 / hour[/green]")
                     yield Static(
-                        self._build_summary(current_region), id="deploy-summary"
+                        "[dim]• Key Pair:[/dim] [white]ED25519 in-memory[/white]"
                     )
 
-                with Horizontal(classes="btn-group"):
-                    yield Button(
-                        "Launch Deployment",
-                        id="btn-start-deploy",
-                        variant="primary",
+            # Right Main Workspace
+            with Vertical(classes="main-workspace"):
+                with Vertical(classes="workspace-card"):
+                    yield Static("[bold white]DEPLOYMENT PIPELINE WIZARD[/bold white]")
+                    yield Static(
+                        "[dim]Choose your infrastructure destination. The instance is ephemeral and disposable.[/dim]"
                     )
-                    yield Button(
-                        "Cancel",
-                        id="btn-cancel",
-                        variant="default",
-                    )
+
+                with ScrollableContainer(classes="main-workspace", id="deploy-scroll"):
+                    # Step 1: Provider selection
+                    with Vertical(classes="field-card"):
+                        yield Label("[bold white]1. Cloud Provider:[/bold white]")
+                        yield Select(
+                            options=[("Amazon Web Services (AWS)", "aws")],
+                            value="aws",
+                            allow_blank=False,
+                            id="select-provider",
+                        )
+                        yield Static(
+                            "[dim]• Infrastructure as Code driven via Pulumi Automation API[/dim]"
+                        )
+
+                    # Step 2: Region selection
+                    with Vertical(classes="field-card"):
+                        yield Label("[bold white]2. Deployment Region:[/bold white]")
+                        regions = (
+                            FALLBACK_AWS_REGIONS
+                            if current_region in FALLBACK_AWS_REGIONS
+                            else [current_region, *FALLBACK_AWS_REGIONS]
+                        )
+                        yield Select(
+                            options=[(r, r) for r in regions],
+                            value=current_region,
+                            allow_blank=False,
+                            id="select-region",
+                        )
+                        yield Static(
+                            "[dim]Syncing available regions with AWS...[/dim]",
+                            id="region-status",
+                        )
+
+                    # Step 3: Target Summary
+                    with Vertical(classes="field-card"):
+                        yield Label(
+                            "[bold white]3. Target Summary & Firewall Rules:[/bold white]"
+                        )
+                        yield Static(
+                            self._build_summary(current_region), id="deploy-summary"
+                        )
+
+                    with Horizontal(classes="btn-group"):
+                        yield Button(
+                            "Launch Deployment (Ctrl+D)",
+                            id="btn-start-deploy",
+                            variant="primary",
+                        )
+                        yield Button(
+                            "Cancel / Back (Esc)", id="btn-cancel", variant="default"
+                        )
+
         yield Footer()
 
     def on_mount(self) -> None:
@@ -162,6 +170,9 @@ class DeployScreen(Screen):
             self.query_one("#deploy-summary", Static).update(
                 self._build_summary(str(current_val))
             )
+            self.query_one("#top-region-badge", Static).update(
+                f"[bold cyan on #10192e] TARGET: {current_val} [/bold cyan on #10192e]"
+            )
         except Exception:
             pass
 
@@ -177,6 +188,9 @@ class DeployScreen(Screen):
             self.query_one("#deploy-summary", Static).update(
                 self._build_summary(str(event.value))
             )
+            self.query_one("#top-region-badge", Static).update(
+                f"[bold cyan on #10192e] TARGET: {event.value} [/bold cyan on #10192e]"
+            )
 
     def _build_summary(self, region: str) -> str:
         """Build the deployment summary text for the given region."""
@@ -185,7 +199,7 @@ class DeployScreen(Screen):
         port_text = (
             f"UDP {cfg.wireguard_port}"
             if cfg.wireguard_port > 0
-            else "Dynamic (49152-65535)"
+            else "Dynamic random (49152-65535)"
         )
         ip_mode = (
             "Current public IP only (/32)"

@@ -1,4 +1,4 @@
-"""Root Textual application and global styles for the Wisp TUI."""
+"""Root Textual application and global full-bleed styles for Wisp CLI."""
 
 from textual.app import App
 from textual.binding import Binding
@@ -16,7 +16,7 @@ class WispApp(App):
     """
 
     TITLE = "wisp"
-    SUB_TITLE = "ephemeral wireguard vpns"
+    SUB_TITLE = "ephemeral wireguard vpns on your cloud"
 
     BINDINGS = [
         Binding("q", "quit", "Quit", show=True),
@@ -27,11 +27,15 @@ class WispApp(App):
     Screen {
         background: #090d16;
         color: #f8fafc;
-        align: center middle;
+        layout: vertical;
+        padding: 0;
+        margin: 0;
+        width: 100%;
+        height: 100%;
     }
 
     Header {
-        background: #090d16;
+        background: #0c101c;
         color: #38bdf8;
         dock: top;
         height: 1;
@@ -39,53 +43,166 @@ class WispApp(App):
     }
 
     Footer {
-        background: #090d16;
+        background: #0c101c;
         dock: bottom;
         height: 1;
         border-top: solid #1e293b;
     }
 
-    .card {
-        background: #0f172a;
-        border: round #334155;
+    /* Full-bleed application top bar */
+    .app-top-bar {
+        height: 3;
+        width: 100%;
+        background: #090d16;
+        border-bottom: solid #1e293b;
+        layout: horizontal;
+        align: left middle;
+        padding: 0 2;
+    }
+
+    .breadcrumb {
+        width: 1fr;
+        layout: horizontal;
+        align: left middle;
+    }
+
+    .top-badges {
+        width: auto;
+        layout: horizontal;
+        align: right middle;
+    }
+
+    .top-badges Static {
+        margin-left: 1;
+    }
+
+    /* Full-bleed multi-pane split layout */
+    .split-layout {
+        layout: horizontal;
+        width: 100%;
+        height: 1fr;
+        background: #090d16;
+    }
+
+    .sidebar {
+        width: 36;
+        min-width: 32;
+        height: 100%;
+        layout: vertical;
+        background: #0a0e19;
+        border-right: solid #1e293b;
         padding: 1 2;
-        width: 76;
-        height: auto;
-        max-height: 96%;
         overflow-y: auto;
     }
 
-    .card:focus-within {
-        border: round #38bdf8;
+    .main-workspace {
+        width: 1fr;
+        height: 100%;
+        layout: vertical;
+        background: #0e1424;
+        padding: 1 2;
+        overflow-y: auto;
     }
 
-    .cli-brand {
-        text-align: center;
-        color: #38bdf8;
-        text-style: bold;
-        margin-bottom: 1;
-    }
-
-    .cli-tagline {
-        text-align: center;
+    /* Section headers */
+    .sidebar-section-title {
         color: #64748b;
+        text-style: bold;
+        margin-top: 1;
         margin-bottom: 1;
     }
 
-    .status-panel {
-        background: #090d16;
+    /* Status panel & context box */
+    .context-box {
+        background: #0c111e;
         border: solid #1e293b;
-        padding: 0 1;
+        padding: 1;
+        margin-top: 1;
+        layout: vertical;
+    }
+
+    .context-box Static {
         margin-bottom: 1;
     }
 
+    /* Cards inside workspace */
+    .workspace-card {
+        background: #131b2e;
+        border: solid #1e293b;
+        padding: 1 2;
+        margin-bottom: 1;
+        layout: vertical;
+        height: auto;
+    }
+
+    .card-header-row {
+        layout: horizontal;
+        align: left middle;
+        width: 100%;
+        margin-bottom: 1;
+    }
+
+    .card-header-row Static {
+        width: 1fr;
+    }
+
+    .metric-row {
+        layout: horizontal;
+        width: 100%;
+        margin-top: 1;
+        margin-bottom: 1;
+    }
+
+    .metric-chip {
+        background: #090d18;
+        border: solid #1e293b;
+        padding: 1;
+        width: 1fr;
+        height: auto;
+        layout: vertical;
+        margin-right: 1;
+    }
+
+    .grid-2col {
+        layout: horizontal;
+        width: 100%;
+        height: auto;
+    }
+
+    .grid-col {
+        width: 1fr;
+        layout: vertical;
+        margin-right: 2;
+        height: auto;
+    }
+
+    /* Highlighted callout action box */
+    .callout-action-box {
+        background: #0a1c29;
+        border: solid #38bdf8;
+        padding: 0 2;
+        margin-top: 1;
+        layout: horizontal;
+        align: left middle;
+        width: 100%;
+        height: 3;
+    }
+
+    .callout-action-box .callout-text {
+        width: 1fr;
+    }
+
+    .callout-action-box .callout-key {
+        width: auto;
+    }
+
+    /* OptionList navigation */
     OptionList {
         background: transparent;
         border: none;
         height: auto;
-        margin-top: 1;
-        margin-bottom: 1;
         padding: 0;
+        margin-bottom: 1;
     }
 
     OptionList:focus {
@@ -93,14 +210,65 @@ class WispApp(App):
     }
 
     OptionList > .option-list--option-highlighted {
-        background: #1e293b;
+        background: #152238;
         color: #38bdf8;
         text-style: bold;
+    }
+
+    /* Badges */
+    .badge-green {
+        background: #06281c;
+        color: #10b981;
+        border: solid #10b981;
+        padding: 0 1;
+        text-style: bold;
+    }
+
+    .badge-cyan {
+        background: #10192e;
+        color: #38bdf8;
+        border: solid #38bdf8;
+        padding: 0 1;
+        text-style: bold;
+    }
+
+    .badge-amber {
+        background: #261c06;
+        color: #f59e0b;
+        border: solid #f59e0b;
+        padding: 0 1;
+        text-style: bold;
+    }
+
+    .badge-red {
+        background: #260606;
+        color: #ef4444;
+        border: solid #ef4444;
+        padding: 0 1;
+        text-style: bold;
+    }
+
+    /* Form styling */
+    .field-card {
+        background: #0b101c;
+        border: solid #1e293b;
+        padding: 1 2;
+        margin-bottom: 1;
+        layout: vertical;
+        height: auto;
+    }
+
+    .field-top-row {
+        layout: horizontal;
+        align: left middle;
+        width: 100%;
     }
 
     .btn-group {
         height: 3;
         margin-top: 1;
+        layout: horizontal;
+        width: 100%;
     }
 
     .btn-group Button {
@@ -157,6 +325,12 @@ class WispApp(App):
 
     Select:focus {
         border: tall #38bdf8;
+    }
+
+    ProgressBar {
+        width: 100%;
+        margin-top: 1;
+        margin-bottom: 1;
     }
     """
 
