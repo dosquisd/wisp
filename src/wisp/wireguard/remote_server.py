@@ -25,7 +25,7 @@ def configure_remote_server(inventory_context: InventoryContext) -> None:
     # Render the Ansible inventory from the template
     render_inventory_template(
         WIREGUARD_INVENTORY_TEMPLATE_PATH,
-        WIREGUARD_INVENTORY_PATH, # type: ignore
+        WIREGUARD_INVENTORY_PATH,  # type: ignore
         inventory_context,
     )
 

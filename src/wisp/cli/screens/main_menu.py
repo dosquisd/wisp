@@ -102,9 +102,7 @@ class MainMenuScreen(Screen):
             f"[dim]STATUS[/dim]    {vpn_status}"
         )
 
-    def on_option_list_option_selected(
-        self, event: OptionList.OptionSelected
-    ) -> None:
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         if event.option_id == "deploy":
             self.action_deploy()
         elif event.option_id == "config":

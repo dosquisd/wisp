@@ -133,9 +133,7 @@ class DeployScreen(Screen):
     def on_screen_resume(self) -> None:
         region_select = self.query_one("#select-region", Select)
         current = str(region_select.value)
-        self.query_one("#deploy-summary", Static).update(
-            self._build_summary(current)
-        )
+        self.query_one("#deploy-summary", Static).update(self._build_summary(current))
 
     @work(thread=True)
     def fetch_live_regions(self) -> None:
@@ -146,9 +144,7 @@ class DeployScreen(Screen):
             provider = AWSProvider()
             regions = list(provider.get_available_regions())
             if regions:
-                self.app.call_from_thread(
-                    self._update_regions_ui, sorted(regions)
-                )
+                self.app.call_from_thread(self._update_regions_ui, sorted(regions))
         except Exception:
             self.app.call_from_thread(self._region_fetch_failed)
 
@@ -156,17 +152,13 @@ class DeployScreen(Screen):
         try:
             region_select = self.query_one("#select-region", Select)
             current_val = (
-                region_select.value
-                if region_select.value in regions
-                else regions[0]
+                region_select.value if region_select.value in regions else regions[0]
             )
             region_select.set_options([(r, r) for r in regions])
             region_select.value = current_val
 
             status = self.query_one("#region-status", Static)
-            status.update(
-                f"[green]✓ {len(regions)} regions available in AWS[/green]"
-            )
+            status.update(f"[green]✓ {len(regions)} regions available in AWS[/green]")
             self.query_one("#deploy-summary", Static).update(
                 self._build_summary(str(current_val))
             )
@@ -181,10 +173,7 @@ class DeployScreen(Screen):
             pass
 
     def on_select_changed(self, event: Select.Changed) -> None:
-        if (
-            event.select.id == "select-region"
-            and event.value is not Select.BLANK
-        ):
+        if event.select.id == "select-region" and event.value is not Select.BLANK:
             self.query_one("#deploy-summary", Static).update(
                 self._build_summary(str(event.value))
             )

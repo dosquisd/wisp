@@ -150,13 +150,9 @@ class ConfigScreen(Screen):
 
     def save_config(self) -> None:
         """Validate form inputs, update state, and persist to config.toml."""
-        timeout_raw = (
-            self.query_one("#input-ansible-timeout", Input).value.strip()
-        )
+        timeout_raw = self.query_one("#input-ansible-timeout", Input).value.strip()
         port_raw = self.query_one("#input-wireguard-port", Input).value.strip()
-        interface = (
-            self.query_one("#input-wireguard-interface", Input).value.strip()
-        )
+        interface = self.query_one("#input-wireguard-interface", Input).value.strip()
         dns1 = self.query_one("#input-dns1", Input).value.strip()
         dns2 = self.query_one("#input-dns2", Input).value.strip()
         force_ip = self.query_one("#switch-force-ip", Switch).value
@@ -166,9 +162,7 @@ class ConfigScreen(Screen):
         try:
             timeout_val = int(timeout_raw)
             if timeout_val < 5:
-                error_label.update(
-                    "[!] Boot timeout must be at least 5 seconds."
-                )
+                error_label.update("[!] Boot timeout must be at least 5 seconds.")
                 return
         except ValueError:
             error_label.update("[!] Boot timeout must be an integer.")
@@ -218,14 +212,12 @@ class ConfigScreen(Screen):
         self.query_one("#input-wireguard-port", Input).value = str(
             default_cfg.wireguard_port
         )
-        self.query_one("#input-wireguard-interface", Input).value = (
-            default_cfg.wireguard_interface
-        )
+        self.query_one(
+            "#input-wireguard-interface", Input
+        ).value = default_cfg.wireguard_interface
         self.query_one("#input-dns1", Input).value = default_cfg.wireguard_dns1
         self.query_one("#input-dns2", Input).value = default_cfg.wireguard_dns2
-        self.query_one("#switch-force-ip", Switch).value = (
-            default_cfg.force_current_ip
-        )
+        self.query_one("#switch-force-ip", Switch).value = default_cfg.force_current_ip
 
         self.query_one("#error-message", Static).update("")
         self.notify("Restored default values", severity="warning")

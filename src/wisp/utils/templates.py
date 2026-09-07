@@ -9,7 +9,10 @@ from wisp.schemas import InventoryContext
 
 
 def render_inventory_template(
-    template_path: str | Path, output_path: str | Path, context: InventoryContext, mode: int = 0o644
+    template_path: str | Path,
+    output_path: str | Path,
+    context: InventoryContext,
+    mode: int = 0o644,
 ) -> None:
     """
     Render the Ansible inventory template using Jinja2.

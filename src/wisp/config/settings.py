@@ -1,8 +1,8 @@
 """Per-session and persistent configuration model (:class:`WispConfig`)."""
 
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-import tomllib
 
 from platformdirs import user_config_path
 
@@ -79,9 +79,7 @@ class WispConfig:
             ansible_timeout=int(
                 ansible.get("timeout", DEFAULT_ANSIBLE_PLAYBOOK_TIMEOUT_SECONDS)
             ),
-            wireguard_interface=str(
-                wireguard.get("interface", WIREGUARD_INTERFACE)
-            ),
+            wireguard_interface=str(wireguard.get("interface", WIREGUARD_INTERFACE)),
             wireguard_ipv4=str(wireguard.get("ipv4", WIREGUARD_IPV4)),
             wireguard_ipv6=str(wireguard.get("ipv6", WIREGUARD_IPV6)),
             wireguard_dns1=str(wireguard.get("dns1", WIREGUARD_DNS1)),
@@ -105,9 +103,7 @@ class WispConfig:
             security = data.get("security", {})
             return cls(
                 ansible_timeout=int(
-                    ansible.get(
-                        "timeout", DEFAULT_ANSIBLE_PLAYBOOK_TIMEOUT_SECONDS
-                    )
+                    ansible.get("timeout", DEFAULT_ANSIBLE_PLAYBOOK_TIMEOUT_SECONDS)
                 ),
                 wireguard_interface=str(
                     wireguard.get("interface", WIREGUARD_INTERFACE)
