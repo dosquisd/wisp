@@ -1,92 +1,74 @@
- # AWS Python S3 Bucket Pulumi Template
+# Wisp
 
- A minimal Pulumi template for provisioning a single AWS S3 bucket using Python.
+**Ephemeral WireGuard VPNs on your own cloud.**
 
- ## Overview
+Wisp spins up a throwaway VM at a cloud provider (currently AWS), installs and
+configures a WireGuard server on it, connects your local machine as a WireGuard
+client, and tears everything down again on demand. Drive it through an
+interactive terminal UI (TUI) or non-interactive CLI subcommands.
 
- This template provisions an S3 bucket (`pulumi_aws.s3.BucketV2`) in your AWS account and exports its ID as an output. It’s an ideal starting point when:
-  - You want to learn Pulumi with AWS in Python.
-  - You need a barebones S3 bucket deployment to build upon.
-  - You prefer a minimal template without extra dependencies.
+```
+   Wisp CLI/TUI ──Pulumi──▶ AWS EC2 (Ubuntu + WireGuard)
+        │  ▲                      │
+        │  └────Ansible (SSH)─────┘   installs & configures the server
+        ▼
+   wisp daemon (root) ──wg-quick──▶ local WireGuard interface (wg0)
+```
 
- ## Prerequisites
+The client-side privileged daemon means the unprivileged CLI/TUI never needs
+`sudo` to bring the local tunnel up or down; it talks to the daemon over a
+group-restricted Unix socket instead.
 
- - An AWS account with permissions to create S3 buckets.
- - AWS credentials configured in your environment (for example via AWS CLI or environment variables).
- - Python 3.6 or later installed.
- - Pulumi CLI already installed and logged in.
+## Requirements
 
- ## Getting Started
+- Linux host (systemd + `wg-quick`)
+- Python 3.14+
+- Pulumi CLI (installed by `setup.sh`)
+- AWS credentials with permissions for EC2, security groups, and key pairs
 
- 1. Generate a new project from this template:
-    ```bash
-    pulumi new aws-python
-    ```
- 2. Follow the prompts to set your project name and AWS region (default: `us-east-1`).
- 3. Change into your project directory:
-    ```bash
-    cd <project-name>
-    ```
- 4. Preview the planned changes:
-    ```bash
-    pulumi preview
-    ```
- 5. Deploy the stack:
-    ```bash
-    pulumi up
-    ```
- 6. Tear down when finished:
-    ```bash
-    pulumi destroy
-    ```
+## Install
 
- ## Project Layout
+Install the CLI:
 
- After running `pulumi new`, your directory will look like:
- ```
- ├── __main__.py         # Entry point of the Pulumi program
- ├── Pulumi.yaml         # Project metadata and template configuration
- ├── requirements.txt    # Python dependencies
- └── Pulumi.<stack>.yaml # Stack-specific configuration (e.g., Pulumi.dev.yaml)
- ```
+```bash
+uv tool install --editable .
+```
 
- ## Configuration
+Install the privileged local daemon (needs root):
 
- This template defines the following config value:
+```bash
+sudo ./setup.sh            # or: sudo ./setup.sh --skip-pulumi
+```
 
- - `aws:region` (string)
-   The AWS region to deploy resources into.
-   Default: `us-east-1`
+Then log out and back in (or `newgrp wisp`) so your `wisp` group membership takes
+effect. See [docs/installation.md](docs/installation.md) for details.
 
- View or update configuration with:
- ```bash
- pulumi config get aws:region
- pulumi config set aws:region us-west-2
- ```
+## Usage
 
- ## Outputs
+```bash
+wisp                          # launch the interactive TUI
+wisp deploy aws -r us-east-2   # deploy a VPN in a region
+wisp destroy aws -r us-east-2  # destroy it and clean up
+wisp regions aws               # list available regions
+```
 
- Once deployed, the stack exports:
+See [docs/usage.md](docs/usage.md) for the full CLI and TUI reference.
 
- - `bucket_name` — the ID of the created S3 bucket.
+## Documentation
 
- Retrieve outputs with:
- ```bash
- pulumi stack output bucket_name
- ```
+Full documentation lives in [`docs/`](docs/README.md):
 
- ## Next Steps
+- [Architecture](docs/architecture.md)
+- [Installation](docs/installation.md)
+- [Usage](docs/usage.md)
+- [Configuration](docs/configuration.md)
+- [Deployment flow](docs/deployment-flow.md)
+- [Security model](docs/security.md)
+- [Components reference](docs/components/README.md)
+- [Contributing](docs/contributing.md)
 
- - Customize `__main__.py` to add or configure additional resources.
- - Explore the Pulumi AWS SDK: https://www.pulumi.com/registry/packages/aws/
- - Break your infrastructure into modules for better organization.
- - Integrate into CI/CD pipelines for automated deployments.
+## License
 
- ## Help and Community
-
- If you have questions or need assistance:
- - Pulumi Documentation: https://www.pulumi.com/docs/
- - Community Slack: https://slack.pulumi.com/
- - GitHub Issues: https://github.com/pulumi/pulumi/issues
-
- Contributions and feedback are always welcome!
+The bundled WireGuard install script (`scripts/wireguard-server-install.sh`) is
+based on [angristan/wireguard-install](https://github.com/angristan/wireguard-install)
+(MIT).
