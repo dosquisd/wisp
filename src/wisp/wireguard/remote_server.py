@@ -8,9 +8,10 @@ from wisp.config.constants import (
     WIREGUARD_PLAYBOOK_PATH,
 )
 from wisp.schemas import InventoryContext
-from wisp.utils import get_ansible_playbook_bin, render_inventory_template
 from wisp.utils import (
+    get_ansible_playbook_bin,
     logger,
+    render_inventory_template,
 )
 
 

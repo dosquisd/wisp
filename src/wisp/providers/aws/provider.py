@@ -22,8 +22,9 @@ from wisp.providers.aws.constants import DEFAULT_REGION
 from wisp.providers.aws.pulumi import create_ec2_instance
 from wisp.providers.base import BaseProvider, DeployVMResult, ProgressCallback
 from wisp.schemas import InventoryContext
-from wisp.utils import create_or_select_pulumi_stack, get_public_ip
 from wisp.utils import (
+    create_or_select_pulumi_stack,
+    get_public_ip,
     logger,
 )
 from wisp.wireguard import (

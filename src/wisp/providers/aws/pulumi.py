@@ -19,8 +19,7 @@ from wisp.providers.aws.constants import (
     DEFAULT_AMI_OWNER,
     DEFAULT_EC2_INSTANCE_TYPE,
 )
-from wisp.utils import get_public_ip, get_wireguard_port
-from wisp.utils import logger
+from wisp.utils import get_public_ip, get_wireguard_port, logger
 
 # Guards one-time plugin installation per process.
 _plugins_ready = False
