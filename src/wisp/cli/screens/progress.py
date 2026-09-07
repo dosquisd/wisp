@@ -12,14 +12,10 @@ from wisp.providers.base import DeployVMResult
 
 
 class ProgressScreen(Screen):
-    """Drives a deploy (and optional destroy) and renders live progress.
-
-    Provider calls run in Textual worker threads; UI updates are marshaled back
-    to the UI thread via ``self.app.call_from_thread``.
-    """
+    """Drives a deploy (and optional destroy) and renders live progress."""
 
     BINDINGS = [
-        Binding("escape", "back", "Volver", show=True),
+        Binding("escape", "back", "Back", show=True),
     ]
 
     CSS = """
@@ -33,9 +29,9 @@ class ProgressScreen(Screen):
 
     #results-box {
         display: none;
-        background: #0b0f19;
-        border: round #10b981;
-        padding: 1;
+        background: #090d16;
+        border: solid #10b981;
+        padding: 1 2;
         margin-top: 1;
         margin-bottom: 1;
         height: auto;
@@ -58,34 +54,32 @@ class ProgressScreen(Screen):
         with Center():
             with Vertical(classes="card"):
                 yield Static(
-                    "[bold cyan]Despliegue en Curso[/bold cyan]",
+                    "[bold cyan]● PROVISIONING INFRASTRUCTURE[/bold cyan]",
                     id="progress-title",
-                    classes="title",
+                    classes="cli-brand",
                 )
                 yield Static(
-                    "Aprovisionando recursos. Por favor no cierres la ventana.",
+                    "Deploying resources. Please do not close this window.",
                     id="progress-subtitle",
-                    classes="subtitle",
+                    classes="cli-tagline",
                 )
                 yield ProgressBar(id="progress-bar", total=100, show_eta=False)
                 yield Static(
-                    "Iniciando proceso de despliegue...",
+                    "Starting deployment pipeline...",
                     id="progress-status-msg",
                 )
                 yield Static("", id="results-box")
 
                 with Horizontal(id="progress-buttons", classes="btn-group"):
                     yield Button(
-                        "Volver al Menú",
+                        "Return to Menu",
                         id="btn-progress-back",
                         variant="primary",
-                        classes="btn-primary",
                     )
                     yield Button(
-                        "Destruir VPN",
+                        "Destroy VPN",
                         id="btn-progress-destroy",
                         variant="error",
-                        classes="btn-danger",
                     )
         yield Footer()
 
@@ -104,15 +98,15 @@ class ProgressScreen(Screen):
         results = self.query_one("#results-box", Static)
         buttons = self.query_one("#progress-buttons", Horizontal)
 
-        title.update("[bold cyan]Despliegue en Curso[/bold cyan]")
+        title.update("[bold cyan]● PROVISIONING INFRASTRUCTURE[/bold cyan]")
         state = self.app.state  # type: ignore[attr-defined]
         subtitle.update(
-            f"Desplegando en AWS ([yellow]{state.selected_region}[/yellow])..."
+            f"Deploying to AWS ([yellow]{state.selected_region}[/yellow])..."
         )
         pbar.styles.display = "block"
         pbar.progress = 5
         status_msg.styles.display = "block"
-        status_msg.update("Iniciando infraestructura...")
+        status_msg.update("Starting Pulumi automation engine...")
         results.styles.display = "none"
         buttons.styles.display = "none"
 
@@ -156,20 +150,22 @@ class ProgressScreen(Screen):
         results = self.query_one("#results-box", Static)
         buttons = self.query_one("#progress-buttons", Horizontal)
 
-        title.update("[bold green]✓ VPN Desplegada y Activa[/bold green]")
-        subtitle.update("La máquina virtual y el túnel WireGuard están listos.")
+        title.update("[bold green]● TUNNEL ACTIVE & READY[/bold green]")
+        subtitle.update(
+            "Virtual machine and WireGuard tunnel are connected and active."
+        )
         pbar.styles.display = "none"
         status_msg.styles.display = "none"
 
         results_text = (
-            f"[bold green]Estado:[/bold green] Activa\n"
-            f"[bold cyan]ID de Instancia:[/bold cyan] {result['instance_id']}\n"
-            f"[bold cyan]IP Pública:[/bold cyan] [yellow]{result['public_ip']}[/yellow]\n"
-            f"[bold cyan]Puerto WireGuard:[/bold cyan] UDP {result['wireguard_port']}\n"
-            f"[bold cyan]IP Privada:[/bold cyan] {result['private_ip']}"
+            f"[dim]STATUS[/dim]       [bold green]● ACTIVE[/bold green]\n"
+            f"[dim]INSTANCE ID[/dim]  {result['instance_id']}\n"
+            f"[dim]PUBLIC IP[/dim]    [yellow]{result['public_ip']}[/yellow]\n"
+            f"[dim]WIREGUARD[/dim]    UDP {result['wireguard_port']}\n"
+            f"[dim]PRIVATE IP[/dim]   {result['private_ip']}"
         )
         results.update(results_text)
-        results.styles.border = ("round", "#10b981")
+        results.styles.border = ("solid", "#10b981")
         results.styles.display = "block"
 
         destroy_btn = self.query_one("#btn-progress-destroy", Button)
@@ -184,8 +180,8 @@ class ProgressScreen(Screen):
         buttons = self.query_one("#progress-buttons", Horizontal)
         destroy_btn = self.query_one("#btn-progress-destroy", Button)
 
-        title.update("[bold red]✗ Error en la Operación[/bold red]")
-        subtitle.update("Ocurrió un problema durante el proceso:")
+        title.update("[bold red]✗ OPERATION FAILED[/bold red]")
+        subtitle.update("An error occurred during execution:")
         pbar.styles.display = "none"
 
         status_msg.update(f"[red]{error_msg}[/red]")
@@ -224,8 +220,8 @@ class ProgressScreen(Screen):
         buttons = self.query_one("#progress-buttons", Horizontal)
         destroy_btn = self.query_one("#btn-progress-destroy", Button)
 
-        title.update("[bold yellow]✓ VPN Destruida[/bold yellow]")
-        subtitle.update("Todos los recursos en la nube han sido eliminados.")
+        title.update("[bold yellow]● INFRASTRUCTURE DESTROYED[/bold yellow]")
+        subtitle.update("All cloud resources and keys have been removed.")
         pbar.styles.display = "none"
         results.styles.display = "none"
         status_msg.styles.display = "none"
@@ -247,20 +243,22 @@ class ProgressScreen(Screen):
         results = self.query_one("#results-box", Static)
         buttons = self.query_one("#progress-buttons", Horizontal)
 
-        title.update("[bold red]Destruyendo Recursos...[/bold red]")
-        subtitle.update("Eliminando instancia EC2 y Security Group en AWS.")
+        title.update("[bold red]● TEARING DOWN INFRASTRUCTURE[/bold red]")
+        subtitle.update("Disconnecting client and deleting AWS resources...")
         results.styles.display = "none"
         buttons.styles.display = "none"
         pbar.styles.display = "block"
         pbar.progress = 20
         status_msg.styles.display = "block"
-        status_msg.update("Contactando a Pulumi...")
+        status_msg.update("Connecting to Pulumi engine...")
 
         self.run_destruction_worker()
 
     def action_back(self) -> None:
-        # Return to main menu screen
+        """Return to the main menu screen."""
         self.app.pop_screen()
-        # If deploy screen was also pushed, pop it to return to main menu
-        if len(self.app.screen_stack) > 1 and type(self.app.screen).__name__ == "DeployScreen":
+        if (
+            len(self.app.screen_stack) > 1
+            and type(self.app.screen).__name__ == "DeployScreen"
+        ):
             self.app.pop_screen()
