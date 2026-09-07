@@ -4,8 +4,8 @@ Requires=wisp.socket
 
 [Service]
 Type=simple
-WorkingDirectory=/usr/local/lib/wisp
-ExecStart=/usr/local/lib/wisp/venv/bin/python -m src.daemon.server
+WorkingDirectory=/usr/local/lib/wisp/src/
+ExecStart=/usr/local/lib/wisp/venv/bin/python -m wisp.daemon.server
 User=root
 NonBlocking=true
 
