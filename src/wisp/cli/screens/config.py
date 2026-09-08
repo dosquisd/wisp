@@ -204,9 +204,9 @@ class ConfigScreen(Screen):
         self.query_one("#input-wireguard-port", Input).value = str(
             default_cfg.wireguard_port
         )
-        self.query_one("#input-wireguard-interface", Input).value = (
-            default_cfg.wireguard_interface
-        )
+        self.query_one(
+            "#input-wireguard-interface", Input
+        ).value = default_cfg.wireguard_interface
         self.query_one("#input-dns1", Input).value = default_cfg.wireguard_dns1
         self.query_one("#input-dns2", Input).value = default_cfg.wireguard_dns2
         self.query_one("#switch-force-ip", Switch).value = default_cfg.force_current_ip

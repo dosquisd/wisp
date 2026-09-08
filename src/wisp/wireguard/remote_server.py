@@ -8,9 +8,10 @@ from wisp.config.constants import (
     WIREGUARD_PLAYBOOK_PATH,
 )
 from wisp.schemas import InventoryContext
-from wisp.utils import get_ansible_playbook_bin, render_inventory_template
 from wisp.utils import (
+    get_ansible_playbook_bin,
     logger,
+    render_inventory_template,
 )
 
 
@@ -24,7 +25,7 @@ def configure_remote_server(inventory_context: InventoryContext) -> None:
     # Render the Ansible inventory from the template
     render_inventory_template(
         WIREGUARD_INVENTORY_TEMPLATE_PATH,
-        WIREGUARD_INVENTORY_PATH, # type: ignore
+        WIREGUARD_INVENTORY_PATH,  # type: ignore
         inventory_context,
     )
 

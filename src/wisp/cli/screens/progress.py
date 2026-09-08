@@ -262,5 +262,8 @@ class ProgressScreen(Screen):
         # Return to main menu screen
         self.app.pop_screen()
         # If deploy screen was also pushed, pop it to return to main menu
-        if len(self.app.screen_stack) > 1 and type(self.app.screen).__name__ == "DeployScreen":
+        if (
+            len(self.app.screen_stack) > 1
+            and type(self.app.screen).__name__ == "DeployScreen"
+        ):
             self.app.pop_screen()

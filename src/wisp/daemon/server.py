@@ -60,7 +60,9 @@ async def handle_status() -> Response:
     return Response(ok=result.returncode == 0, message=result.stdout)
 
 
-async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+async def handle_client(
+    reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+) -> None:
     """Serve a single client connection: read one request, reply with one response.
 
     Reads a newline-delimited :class:`Request`, dispatches to the matching

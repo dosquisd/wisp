@@ -152,9 +152,7 @@ class DeployScreen(Screen):
         try:
             region_select = self.query_one("#select-region", Select)
             current_val = (
-                region_select.value
-                if region_select.value in regions
-                else regions[0]
+                region_select.value if region_select.value in regions else regions[0]
             )
             region_select.set_options([(r, r) for r in regions])
             region_select.value = current_val
@@ -187,14 +185,10 @@ class DeployScreen(Screen):
         state = self.app.state  # type: ignore[attr-defined]
         cfg = state.config
         port_text = (
-            f"UDP {cfg.wireguard_port}"
-            if cfg.wireguard_port > 0
-            else "Aleatorio"
+            f"UDP {cfg.wireguard_port}" if cfg.wireguard_port > 0 else "Aleatorio"
         )
         ip_mode = (
-            "Solo tu IP (/32)"
-            if cfg.force_current_ip
-            else "Cualquier IP (0.0.0.0/0)"
+            "Solo tu IP (/32)" if cfg.force_current_ip else "Cualquier IP (0.0.0.0/0)"
         )
         return (
             f"[cyan]Destino:[/cyan] AWS ({region})   [cyan]Timeout:[/cyan] {cfg.ansible_timeout}s\n"
