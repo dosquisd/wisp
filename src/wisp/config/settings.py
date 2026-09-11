@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from wisp.config.constants import (
-    DEFAULT_ANSIBLE_PLAYBOOK_TIMEOUT_SECONDS,
+    DEFAULT_VM_BOOT_TIMEOUT_SECONDS,
     WIREGUARD_DNS1,
     WIREGUARD_DNS2,
     WIREGUARD_INTERFACE,
@@ -20,8 +20,8 @@ class WispConfig:
     Defaults are drawn from :mod:`wisp.config.constants`.
 
     Attributes:
-        ansible_timeout (int): Seconds to wait for the VM to boot / SSH to come
-            up before running Ansible.
+        vm_boot_timeout (int): Seconds to wait for the VM to boot / SSH to come
+            up before configuring WireGuard.
         wireguard_interface (str): WireGuard interface name (e.g. ``wg0``).
         wireguard_ipv4 (str): Server-side WireGuard IPv4 address.
         wireguard_ipv6 (str): Server-side WireGuard IPv6 address.
@@ -33,7 +33,7 @@ class WispConfig:
             AllowedIPs to your current public IP (``/32``).
     """
 
-    ansible_timeout: int = DEFAULT_ANSIBLE_PLAYBOOK_TIMEOUT_SECONDS
+    vm_boot_timeout: int = DEFAULT_VM_BOOT_TIMEOUT_SECONDS
     wireguard_interface: str = WIREGUARD_INTERFACE
     wireguard_ipv4: str = WIREGUARD_IPV4
     wireguard_ipv6: str = WIREGUARD_IPV6

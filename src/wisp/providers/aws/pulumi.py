@@ -236,9 +236,7 @@ def create_ec2_instance(
     logger.debug("Generating WireGuard private key and creating AWS EC2 Key Pair")
 
     tls_private_key = tls.PrivateKey(
-        "wireguard-private-key",
-        algorithm="ED25519",
-        rsa_bits=4096,
+        "wireguard-private-key", algorithm="RSA", rsa_bits=4096
     )
 
     key_pair = aws.ec2.KeyPair(

@@ -77,7 +77,6 @@ class MacOSAdapter(BaseAdapter):
 
     __type: PlatformEnum = PlatformEnum.MACOS
 
-
     def connect(self, config_content: str) -> subprocess.CompletedProcess:
         raise NotImplementedError("macOS adapter is not implemented yet.")
 

@@ -191,7 +191,7 @@ class DeployScreen(Screen):
             "Solo tu IP (/32)" if cfg.force_current_ip else "Cualquier IP (0.0.0.0/0)"
         )
         return (
-            f"[cyan]Destino:[/cyan] AWS ({region})   [cyan]Timeout:[/cyan] {cfg.ansible_timeout}s\n"
+            f"[cyan]Destino:[/cyan] AWS ({region})   [cyan]Timeout:[/cyan] {cfg.vm_boot_timeout}s\n"
             f"[cyan]Puerto:[/cyan] {port_text}   [cyan]DNS:[/cyan] {cfg.wireguard_dns1}, {cfg.wireguard_dns2}\n"
             f"[cyan]Firewall:[/cyan] {ip_mode}"
         )

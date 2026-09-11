@@ -11,7 +11,6 @@ from wisp.config.constants import (
     WIREGUARD_DNS1,
     WIREGUARD_DNS2,
     WIREGUARD_INTERFACE,
-    WIREGUARD_INVENTORY_PATH,
     WIREGUARD_IPV4,
     WIREGUARD_IPV6,
     WIREGUARD_KEY_PATH,
@@ -37,9 +36,9 @@ from wisp.wireguard import (
 class AWSProvider(BaseProvider):
     """AWS implementation of :class:`~wisp.providers.base.BaseProvider`.
 
-    Uses the Pulumi Automation API to provision/destroy an EC2 instance, Ansible
-    to configure the remote WireGuard server, and the local daemon to connect the
-    client tunnel.
+    Uses the Pulumi Automation API to provision/destroy an EC2 instance, Paramiko
+    (SSH/SFTP) to configure the remote WireGuard server, and the local daemon to
+    connect the client tunnel.
     """
 
     def __create_pulumi_program(
@@ -74,11 +73,10 @@ class AWSProvider(BaseProvider):
     ) -> DeployVMResult:
         """Provision an EC2 VM, configure WireGuard, and connect the client.
 
-        Runs ``pulumi up``, waits ``config.ansible_timeout`` seconds for boot,
-        writes the SSH/WireGuard private key locally (``0600``), renders the
-        Ansible inventory, runs the playbook against the VM, and finally connects
-        the local WireGuard client via the daemon. See
-        ``docs/deployment-flow.md`` for the full sequence.
+        Runs ``pulumi up``, waits ``config.vm_boot_timeout`` seconds for boot,
+        writes the SSH/WireGuard private key locally (``0600``), configures
+        the remote server via SSH/SFTP, and finally connects the local WireGuard
+        client via the daemon.
 
         Args:
             region (str): Target region.
@@ -113,7 +111,7 @@ class AWSProvider(BaseProvider):
         )  # type: ignore
         up_result = stack.up()
 
-        timeout_seconds = config.ansible_timeout
+        timeout_seconds = config.vm_boot_timeout
         logger.debug(
             f"Waiting for {timeout_seconds} "
             "seconds for the stack to be fully deployed..."
@@ -145,7 +143,7 @@ class AWSProvider(BaseProvider):
         )
 
         if on_progress:
-            on_progress("Configurando llaves e inventario de Ansible...", 0.78)
+            on_progress("Configurando claves SSH...", 0.78)
 
         # Write the WireGuard/SSH private key
         WIREGUARD_KEYS_DIR.mkdir(parents=True, exist_ok=True)
@@ -182,7 +180,7 @@ class AWSProvider(BaseProvider):
         )
 
         if on_progress:
-            on_progress("Instalando y configurando WireGuard con Ansible...", 0.85)
+            on_progress("Instalando y configurando WireGuard vía SSH...", 0.85)
 
         # Configure the remote WireGuard server and the local WireGuard client
         configure_remote_server(template_context)
@@ -231,10 +229,6 @@ class AWSProvider(BaseProvider):
 
         # Remove the WireGuard related files if they exist
         logger.debug("Removing WireGuard related files...")
-        if WIREGUARD_INVENTORY_PATH.exists():
-            os.remove(WIREGUARD_INVENTORY_PATH)
-            logger.debug(f"Removed inventory file: {WIREGUARD_INVENTORY_PATH}")
-
         if WIREGUARD_KEY_PATH.exists():
             os.remove(WIREGUARD_KEY_PATH)
             logger.debug(f"Removed WireGuard key file: {WIREGUARD_KEY_PATH}")

@@ -30,7 +30,7 @@ Entry: `AWSProvider.deploy_vm(region, force_current_ip=False, config=None, on_pr
    - Stack **outputs**: `instance_id`, `instance_public_ip`,
      `instance_private_ip`, `instance_private_key`, `wireguard_port`, `ssh_user`.
 
-3. **Wait for boot.** Sleeps `config.ansible_timeout` seconds (default 60),
+3. **Wait for boot.** Sleeps `config.vm_boot_timeout` seconds (default 60),
    reporting progress via `on_progress` (TUI) or `tqdm` (CLI).
 
 4. **Persist the private key.** Reads the `instance_private_key` output and writes
@@ -39,31 +39,28 @@ Entry: `AWSProvider.deploy_vm(region, force_current_ip=False, config=None, on_pr
 5. **Compute AllowedIPs.** `<your-ip>/32` if `force_current_ip`, else
    `0.0.0.0/0,::/0`.
 
-6. **Render the Ansible inventory.** An `InventoryContext` is built from the
-   outputs + WireGuard constants and rendered through
-   `templates/inventory.ini.j2` into `inventory/inventory.ini`
-   (`utils/templates.render_inventory_template`, output mode `0644`).
-
-7. **Configure the remote server.** `configure_remote_server(context)`
+6. **Configure the remote server.** `configure_remote_server(context)`
    (`wireguard/remote_server.py`) runs:
-   ```
-   ansible-playbook -i inventory/inventory.ini ansible/wireguard_install.yaml
-   ```
-   The playbook (`ansible/wireguard_install.yaml`):
-   - copies `scripts/wireguard-server-install.sh` to the VM and runs it
-     non-interactively (`AUTO_INSTALL=y`), passing server IP, port, interface,
-     IPv4/IPv6, DNS, and client parameters as environment variables;
-   - ensures `wg-quick@wg0` is started and enabled;
-   - finds the generated `wg0-client-*.conf` and **fetches** it back to
-     `wireguard-confs/wg0-client.conf`.
+   - Establishes SSH connection to the VM using the private key
+   - Uploads `scripts/wireguard-install.sh` via SFTP to `/tmp/wireguard-install.sh`
+   - Executes the script remotely with configuration passed as environment variables:
+     `SERVER_PUB_IP`, `SERVER_PORT`, `ALLOWED_IPS`, `SERVER_WG_NIC`,
+     `SERVER_WG_IPV4`, `SERVER_WG_IPV6`, `CLIENT_DNS_1`, `CLIENT_DNS_2`,
+     `AUTO_INSTALL=y`, `CLIENT_NAME`, `CLIENT_WG_IPV4`, `CLIENT_WG_IPV6`,
+     `SKIP_CLIENT_CREATION`
+   - The script (`scripts/wireguard-install.sh`) installs WireGuard non-interactively,
+     configures the interface, firewall (firewalld or iptables), routing, and generates
+     the client configuration
+   - Downloads the generated client config (`wg0-client-*.conf`) via SFTP to
+     `wireguard-confs/wg0-client.conf`
 
-8. **Connect the local client.** `connect_wireguard_client(conf_text)`
+7. **Connect the local client.** `connect_wireguard_client(conf_text)`
    (`wireguard/local_client.py`) sends a `CONNECT` request with the config
    content to the daemon over `/run/wisp.sock`. The daemon
    (`daemon/server.py`) writes `/etc/wireguard/wg0.conf` (`0600`) and runs
    `wg-quick up wg0`.
 
-9. **Return.** A `DeployVMResult` with `instance_id`, `public_ip`, `private_ip`,
+8. **Return.** A `DeployVMResult` with `instance_id`, `public_ip`, `private_ip`,
    and `wireguard_port`.
 
 ## Destroy
@@ -77,7 +74,6 @@ Entry: `AWSProvider.delete_vm(region, on_progress=None)`.
    Errors are logged and cause an early return of `0`.
 
 3. **Clean up local artifacts** (if present):
-   - `inventory/inventory.ini`
    - `keys/wireguard-key.pem`
    - `wireguard-confs/wg0-client.conf`
 
@@ -88,7 +84,7 @@ Entry: `AWSProvider.delete_vm(region, on_progress=None)`.
 
 `scripts/wireguard-server-install.sh` is a non-interactive WireGuard server
 installer (based on the widely used `angristan/wireguard-install`, MIT). It is
-driven entirely by environment variables set by the Ansible task, so no
-interactive prompts are needed. `scripts/utils.sh` holds shared shell helpers
+driven entirely by environment variables set by the SSH/SFTP orchestration,
+so no interactive prompts are needed. `scripts/utils.sh` holds shared shell helpers
 (`isRoot`, `checkOS`, `installPackages`, `installWireGuardClient`,
 `uninstallWg`) used by both the server and client install scripts.

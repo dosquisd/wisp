@@ -15,7 +15,9 @@ def connect_wireguard_client(config_content: str) -> Response:
         config_content (str): The full WireGuard client configuration.
     """
     transport = get_transport()
-    return transport.send(Request(action=ActionEnum.CONNECT, config_content=config_content))
+    return transport.send(
+        Request(action=ActionEnum.CONNECT, config_content=config_content)
+    )
 
 
 def disconnect_wireguard_client() -> Response:

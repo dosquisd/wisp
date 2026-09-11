@@ -69,10 +69,10 @@ class ConfigScreen(Screen):
                 )
 
                 with ScrollableContainer(id="form-container"):
-                    yield Label("Timeout de Ansible (segundos para boot):")
+                    yield Label("Timeout VM Boot (segundos para boot):")
                     yield Input(
-                        id="input-ansible-timeout",
-                        value=str(self.app.state.config.ansible_timeout),  # type: ignore[attr-defined]
+                        id="input-vm-boot-timeout",
+                        value=str(self.app.state.config.vm_boot_timeout),  # type: ignore[attr-defined]
                         type="integer",
                     )
 
@@ -145,7 +145,7 @@ class ConfigScreen(Screen):
         Shows an inline error and returns early if any field is invalid
         (timeout < 5, port out of ``0-65535``, empty interface/DNS).
         """
-        timeout_raw = self.query_one("#input-ansible-timeout", Input).value.strip()
+        timeout_raw = self.query_one("#input-vm-boot-timeout", Input).value.strip()
         port_raw = self.query_one("#input-wireguard-port", Input).value.strip()
         interface = self.query_one("#input-wireguard-interface", Input).value.strip()
         dns1 = self.query_one("#input-dns1", Input).value.strip()
@@ -182,7 +182,7 @@ class ConfigScreen(Screen):
 
         # Update in-memory state
         state = self.app.state  # type: ignore[attr-defined]
-        state.config.ansible_timeout = timeout_val
+        state.config.vm_boot_timeout = timeout_val
         state.config.wireguard_port = port_val
         state.config.wireguard_interface = interface
         state.config.wireguard_dns1 = dns1
@@ -198,8 +198,8 @@ class ConfigScreen(Screen):
         state.reset_config()
 
         default_cfg = WispConfig()
-        self.query_one("#input-ansible-timeout", Input).value = str(
-            default_cfg.ansible_timeout
+        self.query_one("#input-vm-boot-timeout", Input).value = str(
+            default_cfg.vm_boot_timeout
         )
         self.query_one("#input-wireguard-port", Input).value = str(
             default_cfg.wireguard_port

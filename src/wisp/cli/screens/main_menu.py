@@ -81,7 +81,7 @@ class MainMenuScreen(Screen):
         return (
             f"[dim]Proveedor:[/dim] [cyan]{state.provider_name.upper()}[/cyan]   "
             f"[dim]Región:[/dim] [yellow]{state.selected_region}[/yellow]\n"
-            f"[dim]Timeout:[/dim] [white]{cfg.ansible_timeout}s[/white]   "
+            f"[dim]Timeout:[/dim] [white]{cfg.vm_boot_timeout}s[/white]   "
             f"[dim]Puerto:[/dim] [white]{port_str}[/white]\n"
             f"[dim]Firewall:[/dim] [white]{ip_mode}[/white]\n"
         )

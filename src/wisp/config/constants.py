@@ -15,16 +15,13 @@ DEFAULT_TAG = {
     "created-by": CREATED_BY_TAG,
 }
 
-DEFAULT_ANSIBLE_PLAYBOOK_TIMEOUT_SECONDS: int = 60
+DEFAULT_VM_BOOT_TIMEOUT_SECONDS: int = 60
 
 # Project root, derived from this file's location (src/wisp/config/constants.py)
 ROOTDIR = Path(__file__).resolve().parents[3]
 
 # Project paths
-WIREGUARD_SCRIPT_PATH = ROOTDIR / "scripts" / "wireguard-install.sh"
-WIREGUARD_PLAYBOOK_PATH = ROOTDIR / "ansible" / "wireguard_install.yaml"
-WIREGUARD_INVENTORY_TEMPLATE_PATH = ROOTDIR / "templates" / "inventory.ini.j2"
-WIREGUARD_INVENTORY_PATH = ROOTDIR / "inventory" / "inventory.ini"
+WIREGUARD_SCRIPT_PATH = ROOTDIR / "scripts" / "wireguard-server-install.sh"
 WIREGUARD_KEYS_DIR = ROOTDIR / "keys"
 WIREGUARD_KEY_PATH = WIREGUARD_KEYS_DIR / "wireguard-key.pem"
 WIREGUARD_CLIENT_CONF_PATH = ROOTDIR / "wireguard-confs" / "wg0-client.conf"

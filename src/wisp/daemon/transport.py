@@ -56,9 +56,9 @@ class BaseTransport(ABC):
 
 class UnixSocketTransport(BaseTransport):
     """Transport implementation using Unix domain sockets."""
+
     # Unix domain socket the daemon listens on (see packaging/wisp.socket).
     SOCKET_PATH: str = "/run/wisp.sock"
-
 
     def __init__(self):
         super().__init__()
