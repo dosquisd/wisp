@@ -19,6 +19,9 @@ dependencies = [
 [project.scripts]
 wisp = "wisp.main:main"
 
+[tool.uv]
+package = true
+
 [tool.ruff]
 exclude = [".git", ".pytest_cache", ".venv"]
 line-length = 88
