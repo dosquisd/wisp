@@ -9,9 +9,6 @@ import enum
 import json
 from dataclasses import asdict, dataclass
 
-# Unix domain socket the daemon listens on (see packaging/wisp.socket).
-SOCKET_PATH = "/run/wisp.sock"
-
 
 class ActionEnum(enum.StrEnum):
     """Operations the daemon can perform on the local WireGuard interface."""

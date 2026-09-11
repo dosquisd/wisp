@@ -9,6 +9,7 @@ from urllib.request import urlopen
 
 from wisp.utils.ansible import get_ansible_playbook_bin
 from wisp.utils.logger import logger
+from wisp.utils.platform import PlatformEnum
 from wisp.utils.randoms import get_random_generator, get_wireguard_port
 
 
@@ -39,4 +40,5 @@ __all__ = [
     "get_random_generator",
     "get_wireguard_port",
     "logger",
+    "PlatformEnum",
 ]

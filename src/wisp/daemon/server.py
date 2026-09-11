@@ -8,22 +8,14 @@ the local tunnel up or down.
 
 import asyncio
 import subprocess
-from pathlib import Path
 
-from wisp.daemon.protocol import SOCKET_PATH, ActionEnum, Request, Response
+from wisp.daemon.adapter import BaseAdapter
+from wisp.daemon.protocol import ActionEnum, Request, Response
+from wisp.daemon.transport import get_transport
 from wisp.utils.logger import logger
 
-# Local WireGuard config the daemon writes and manages.
-WG_CONF_PATH = Path("/etc/wireguard/wg0.conf")
 
-
-def _run(cmd: list[str]) -> subprocess.CompletedProcess:
-    """Run a command, raising on non-zero exit, capturing text output."""
-    logger.debug(f"[daemon] running: {' '.join(cmd)}")
-    return subprocess.run(cmd, check=True, text=True, capture_output=True)
-
-
-async def handle_connect(config_content: str) -> Response:
+async def handle_connect(config_content: str, adapter: BaseAdapter) -> Response:
     """Write the WireGuard config and bring the ``wg0`` interface up.
 
     Writes ``config_content`` to :data:`WG_CONF_PATH` with mode ``0600`` and runs
@@ -31,37 +23,35 @@ async def handle_connect(config_content: str) -> Response:
 
     Args:
         config_content (str): The full WireGuard client configuration.
+        adapter (BaseAdapter): The platform-specific adapter to use for connecting.
 
     Returns:
         Response: ``ok=True`` on success, otherwise the command's stderr.
     """
     try:
-        WG_CONF_PATH.parent.mkdir(parents=True, exist_ok=True)
-        WG_CONF_PATH.write_text(config_content)
-        WG_CONF_PATH.chmod(0o600)
-        _run(["wg-quick", "up", "wg0"])
+        adapter.connect(config_content)
         return Response(ok=True, message="connected")
     except subprocess.CalledProcessError as e:
         return Response(ok=False, message=e.stderr or str(e))
 
 
-async def handle_disconnect() -> Response:
+async def handle_disconnect(adapter: BaseAdapter) -> Response:
     """Bring the ``wg0`` interface down via ``wg-quick down wg0``."""
     try:
-        _run(["wg-quick", "down", "wg0"])
+        adapter.disconnect()
         return Response(ok=True, message="disconnected")
     except subprocess.CalledProcessError as e:
         return Response(ok=False, message=e.stderr or str(e))
 
 
-async def handle_status() -> Response:
+async def handle_status(adapter: BaseAdapter) -> Response:
     """Return the output of ``wg show wg0`` (``ok`` reflects the exit code)."""
-    result = subprocess.run(["wg", "show", "wg0"], capture_output=True, text=True)
+    result = adapter.status()
     return Response(ok=result.returncode == 0, message=result.stdout)
 
 
 async def handle_client(
-    reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    reader: asyncio.StreamReader, writer: asyncio.StreamWriter, adapter: BaseAdapter
 ) -> None:
     """Serve a single client connection: read one request, reply with one response.
 
@@ -74,11 +64,11 @@ async def handle_client(
         req = Request.decode(raw)
 
         if req.action == ActionEnum.CONNECT:
-            resp = await handle_connect(req.config_content or "")
+            resp = await handle_connect(req.config_content or "", adapter)
         elif req.action == ActionEnum.DISCONNECT:
-            resp = await handle_disconnect()
+            resp = await handle_disconnect(adapter)
         elif req.action == ActionEnum.STATUS:
-            resp = await handle_status()
+            resp = await handle_status(adapter)
         else:
             resp = Response(ok=False, message=f"unknown action: {req.action}")
     except Exception as e:
@@ -93,31 +83,8 @@ async def handle_client(
 
 
 async def main() -> None:
-    """Start the asyncio Unix-socket server and serve forever.
-
-    Under systemd socket activation (``LISTEN_FDS`` set) the listening socket is
-    adopted from file descriptor 3; for local development the socket is created
-    directly at :data:`~wisp.daemon.protocol.SOCKET_PATH`.
-    """
-    # systemd gives us the socket via socket activation (fd 3),
-    # but for local development we also support creating it directly.
-    if "LISTEN_FDS" in __import__("os").environ:
-        server = await asyncio.start_unix_server(
-            handle_client, sock=_socket_from_systemd()
-        )
-    else:
-        server = await asyncio.start_unix_server(handle_client, path=SOCKET_PATH)
-
-    logger.info("wisp daemon listening")
-    async with server:
-        await server.serve_forever()
-
-
-def _socket_from_systemd():
-    """Build a socket object from the systemd-provided fd 3 (socket activation)."""
-    import socket
-
-    return socket.fromfd(3, socket.AF_UNIX, socket.SOCK_STREAM)
+    transport = get_transport()
+    await transport.serve(handle_client)
 
 
 if __name__ == "__main__":
