@@ -29,7 +29,10 @@ DEFAULT_TAG = {
 DEFAULT_VM_BOOT_TIMEOUT_SECONDS: int = 60
 
 # Project root, derived from this file's location (src/wisp/config/constants.py)
-ROOTDIR = __project_root()
+try:
+    ROOTDIR = __project_root()
+except FileNotFoundError:
+    ROOTDIR = Path(__file__).resolve().parents[3]
 
 # Project paths
 WIREGUARD_SCRIPT_PATH = ROOTDIR / "scripts" / "wireguard-server-install.sh"
