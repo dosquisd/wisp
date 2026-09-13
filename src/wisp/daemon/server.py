@@ -11,7 +11,7 @@ import subprocess
 
 from wisp.daemon.adapter import BaseAdapter
 from wisp.daemon.protocol import ActionEnum, Request, Response
-from wisp.daemon.transport import get_transport
+from wisp.daemon.transport import BaseTransport, get_transport
 from wisp.utils.logger import logger
 
 
@@ -82,8 +82,8 @@ async def handle_client(
         writer.close()
 
 
-async def main() -> None:
-    transport = get_transport()
+async def main(transport: BaseTransport | None = None) -> None:
+    transport = transport or get_transport()
     await transport.serve(handle_client)
 
 
