@@ -8,7 +8,7 @@ to avoid importing Pulumi at package load.
 from urllib.request import urlopen
 
 from wisp.utils.logger import logger
-from wisp.utils.platform import PlatformEnum
+from wisp.utils.platform import PlatformEnum, secure_file
 from wisp.utils.randoms import get_random_generator, get_wireguard_port
 
 
@@ -34,4 +34,5 @@ __all__ = [
     "get_wireguard_port",
     "logger",
     "PlatformEnum",
+    "secure_file",
 ]

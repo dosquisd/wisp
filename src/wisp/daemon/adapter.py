@@ -2,7 +2,7 @@ import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from wisp.utils import PlatformEnum, logger
+from wisp.utils import PlatformEnum, logger, secure_file
 
 
 class BaseAdapter(ABC):
@@ -46,6 +46,10 @@ class LinuxAdapter(BaseAdapter):
         self.WG_CONF_PATH.parent.mkdir(parents=True, exist_ok=True)
         self.WG_CONF_PATH.write_text(config_content)
         self.WG_CONF_PATH.chmod(0o600)
+
+        # Best-effort: bring down any leftover interface before starting fresh.
+        subprocess.run(["wg-quick", "down", "wg0"], capture_output=True, text=True)
+
         return self._run(["wg-quick", "up", "wg0"])
 
     def disconnect(self) -> subprocess.CompletedProcess:
@@ -58,18 +62,42 @@ class LinuxAdapter(BaseAdapter):
 
 
 class WindowsAdapter(BaseAdapter):
-    WG_CONF_PATH: Path
+    WG_CONF_PATH: Path = Path("/ProgramData/wisp/wireguard/wg0.conf")
 
     __type: PlatformEnum = PlatformEnum.WINDOWS
 
+    @property
+    def tunnel_name(self) -> str:
+        return self.WG_CONF_PATH.stem
+
+    @property
+    def tunnel_service(self) -> str:
+        return f"WireGuardTunnel${self.tunnel_name}"
+
     def connect(self, config_content: str) -> subprocess.CompletedProcess:
-        raise NotImplementedError("Windows adapter is not implemented yet.")
+        self.WG_CONF_PATH.parent.mkdir(parents=True, exist_ok=True)
+        self.WG_CONF_PATH.write_text(config_content, encoding="utf-8")
+        secure_file(self.WG_CONF_PATH, platform_enum=PlatformEnum.WINDOWS)
+
+        # Remove any leftover tunnel from a previous session before installing
+        # the new one — installtunnelservice fails if the name is already taken.
+        subprocess.run(
+            ["wireguard", "/uninstalltunnelservice", self.tunnel_name],
+            capture_output=True,
+            text=True,
+        )  # best-effort; ignore failure if it wasn't installed
+
+        return self._run(["wireguard", "/installtunnelservice", str(self.WG_CONF_PATH)])
 
     def disconnect(self) -> subprocess.CompletedProcess:
-        raise NotImplementedError("Windows adapter is not implemented yet.")
+        return self._run(["wireguard", "/uninstalltunnelservice", self.tunnel_name])
 
     def status(self) -> subprocess.CompletedProcess:
-        raise NotImplementedError("Windows adapter is not implemented yet.")
+        return subprocess.run(
+            ["sc.exe", "query", self.tunnel_service],
+            capture_output=True,
+            text=True,
+        )
 
 
 class MacOSAdapter(BaseAdapter):

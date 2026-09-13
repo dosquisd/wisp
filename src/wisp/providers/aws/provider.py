@@ -25,6 +25,7 @@ from wisp.utils import (
     create_or_select_pulumi_stack,
     get_public_ip,
     logger,
+    secure_file,
 )
 from wisp.wireguard import (
     configure_remote_server,
@@ -147,12 +148,9 @@ class AWSProvider(BaseProvider):
 
         # Write the WireGuard/SSH private key
         WIREGUARD_KEYS_DIR.mkdir(parents=True, exist_ok=True)
-        with open(
-            WIREGUARD_KEY_PATH,
-            "w",
-            opener=lambda p, f: os.open(p, f, 0o600),
-        ) as f:
-            f.write(private_key)
+        WIREGUARD_KEY_PATH.write_text(private_key, encoding="utf-8")
+
+        secure_file(WIREGUARD_KEY_PATH)
         logger.debug(
             f"Private key written to '{WIREGUARD_KEY_PATH}' with permissions 600"
         )
@@ -184,10 +182,21 @@ class AWSProvider(BaseProvider):
 
         # Configure the remote WireGuard server and the local WireGuard client
         configure_remote_server(template_context)
-        connect_wireguard_client(WIREGUARD_CLIENT_CONF_PATH.read_text())
-
-        if on_progress:
-            on_progress("¡VPN desplegada y activa!", 1.0)
+        connect_response = connect_wireguard_client(
+            WIREGUARD_CLIENT_CONF_PATH.read_text()
+        )
+        if not connect_response.ok:
+            logger.warning(
+                f"Failed to connect the local WireGuard client: {connect_response.message}"
+            )
+            if on_progress:
+                on_progress(
+                    "VM desplegada, pero el túnel local no pudo conectarse automáticamente.",
+                    1.0,
+                )
+        else:
+            if on_progress:
+                on_progress("¡VPN desplegada y activa!", 1.0)
 
         return DeployVMResult(
             instance_id=instance_id,
@@ -214,7 +223,14 @@ class AWSProvider(BaseProvider):
         logger.info(f"Deleting VM in region '{region}'...")
 
         logger.debug("Disconnecting WireGuard client...")
-        disconnect_wireguard_client()
+        disconnect_response = disconnect_wireguard_client()
+        if not disconnect_response.ok:
+            logger.error(
+                f"Failed to disconnect the local WireGuard client: {disconnect_response.message}"
+            )
+            raise RuntimeError(
+                f"Failed to disconnect the local WireGuard client: {disconnect_response.message}"
+            )
 
         stack = create_or_select_pulumi_stack(
             lambda: self.__create_pulumi_program(region)
