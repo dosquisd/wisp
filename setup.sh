@@ -33,7 +33,15 @@ function ensureCurl() {
 }
 
 function installPulumi() {
-    if command -v pulumi &>/dev/null; then
+    local pulumi_user="${SUDO_USER:-root}"
+    local pulumi_home
+
+    pulumi_home=$(getent passwd "${pulumi_user}" | cut -d: -f6)
+
+    if command -v pulumi &>/dev/null \
+        || runuser -u "${pulumi_user}" -- sh -lc 'command -v pulumi' &>/dev/null \
+        || [[ -x "${pulumi_home}/.pulumi/bin/pulumi" ]] \
+        || [[ -x "${PULUMI_INSTALL_DIR}/bin/pulumi" ]]; then
         echo -e "${GREEN}Pulumi is already installed. Skipping.${NC}"
         return
     fi
@@ -43,12 +51,12 @@ function installPulumi() {
         exit 1
     fi
 
-    echo -e "${GREEN}Installing Pulumi in ${PULUMI_INSTALL_DIR}...${NC}"
-    curl -fsSL https://get.pulumi.com | sh -s -- --install-root "${PULUMI_INSTALL_DIR}" --no-edit-path
+    echo -e "${GREEN}Installing Pulumi for ${pulumi_user}...${NC}"
+    curl -fsSL https://get.pulumi.com | runuser -u "${pulumi_user}" -- \
+        env HOME="${pulumi_home}" sh -s -- \
+        --install-root "${pulumi_home}/.pulumi" --no-edit-path
 
-    ln -sf "${PULUMI_INSTALL_DIR}/bin/pulumi" /usr/local/bin/pulumi
-
-    echo -e "${GREEN}Pulumi installaed and linked in /usr/local/bin/pulumi${NC}"
+    echo -e "${GREEN}Pulumi installed in ${pulumi_home}/.pulumi${NC}"
 }
 
 function createWispGroup() {
@@ -69,6 +77,7 @@ function createWispGroup() {
 }
 
 function installDaemonFiles() {
+    rm -rf "${WISP_INSTALL_DIR}/src" "${WISP_INSTALL_DIR}/venv"
     mkdir -p "${WISP_INSTALL_DIR}"
 
     # Copy the source code to the installation directory
@@ -80,6 +89,23 @@ function installDaemonFiles() {
     # Install only the dependencies needed for the daemon (probably nothing external)
 
     echo -e "${GREEN}Daemon files installed in ${WISP_INSTALL_DIR}${NC}"
+}
+
+function removeExistingInstallation() {
+    echo -e "${GREEN}Removing existing Wisp installation...${NC}"
+
+    systemctl stop wisp.service wisp.socket 2>/dev/null || true
+    systemctl disable wisp.service wisp.socket 2>/dev/null || true
+
+    rm -f \
+        /etc/systemd/system/wisp.service \
+        /etc/systemd/system/wisp.socket \
+        "${SOCKET_PATH}"
+
+    rm -rf "${WISP_INSTALL_DIR}/src" "${WISP_INSTALL_DIR}/venv"
+
+    systemctl daemon-reload
+    systemctl reset-failed wisp.service wisp.socket 2>/dev/null || true
 }
 
 function installSystemdUnits() {
@@ -114,6 +140,7 @@ initialCheck
 ensureCurl
 installWireGuardClient
 [[ "${SKIP_PULUMI}" == false ]] && installPulumi
+removeExistingInstallation
 createWispGroup
 installDaemonFiles
 installSystemdUnits

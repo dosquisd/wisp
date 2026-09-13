@@ -56,13 +56,16 @@ What `setup.sh` does, in order:
 2. `ensureCurl` — installs `curl` if missing (needed to fetch Pulumi).
 3. `installWireGuardClient` — installs WireGuard tools for the detected OS and
    verifies `wg` is available.
-4. `installPulumi` — installs Pulumi into `/usr/local/lib/wisp/pulumi` and links
-   `/usr/local/bin/pulumi` (skipped with `--skip-pulumi` or if already present).
-5. `createWispGroup` — creates the `wisp` group and adds the invoking user
+4. `installPulumi` — detects Pulumi in the root or invoking user's environment;
+  if it is missing, installs it for the invoking user under `~/.pulumi`
+  (skipped with `--skip-pulumi`).
+5. `removeExistingInstallation` — stops and disables the previous service and
+  socket, removes their systemd unit files and clears the old daemon files.
+6. `createWispGroup` — creates the `wisp` group and adds the invoking user
    (`$SUDO_USER`) to it. This group gates access to the daemon socket.
-6. `installDaemonFiles` — copies `src/` to `/usr/local/lib/wisp/src` and creates
+7. `installDaemonFiles` — copies `src/` to `/usr/local/lib/wisp/src` and creates
    an isolated virtualenv at `/usr/local/lib/wisp/venv`.
-7. `installSystemdUnits` — installs `wisp.socket` and `wisp.service`, reloads
+8. `installSystemdUnits` — installs `wisp.socket` and `wisp.service`, reloads
    systemd, and enables/starts the socket.
 
 > After running `setup.sh`, log out and back in (or run `newgrp wisp`) so your
@@ -91,7 +94,7 @@ local development, creating the socket directly at `SOCKET_PATH`.
 These are created/populated at runtime and are gitignored:
 
 | Path | Contents |
-|------|----------|
+| ------ | ---------- |
 | `keys/wireguard-key.pem` | SSH/WireGuard private key (mode `0600`) |
 | `inventory/inventory.ini` | Rendered Ansible inventory |
 | `wireguard-confs/wg0-client.conf` | Client config fetched from the VM |
