@@ -7,6 +7,16 @@ location (``src/wisp/config/constants.py`` → three parents up = repo root).
 
 from pathlib import Path
 
+
+def __project_root(anchor: str = "pyproject.toml"):
+    path = Path.cwd()
+    for parent in [path] + list(path.parents):
+        if (parent / anchor).exists():
+            return parent
+    raise FileNotFoundError(
+        f"Could not find {anchor} in the parent directories of {path}"
+    )
+
 CREATED_BY_TAG: str = "wisp"
 PULUMI_STACK_NAME: str = "wisp-stack"
 PULUMI_PROJECT_NAME: str = "wisp-project"
@@ -18,7 +28,7 @@ DEFAULT_TAG = {
 DEFAULT_VM_BOOT_TIMEOUT_SECONDS: int = 60
 
 # Project root, derived from this file's location (src/wisp/config/constants.py)
-ROOTDIR = Path(__file__).resolve().parents[3]
+ROOTDIR = __project_root()
 
 # Project paths
 WIREGUARD_SCRIPT_PATH = ROOTDIR / "scripts" / "wireguard-server-install.sh"
