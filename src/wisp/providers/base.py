@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from typing import TypedDict
 
+from wisp.config.credentials import BaseCredentials
 from wisp.config.settings import WispConfig
 
 # Progress reporting callback: (message, fraction in [0, 1] or None).
@@ -42,6 +43,21 @@ class DeployVMResult(TypedDict):
 
 class BaseProvider(ABC):
     """Interface every cloud provider must implement."""
+
+    @abstractmethod
+    def __init__(self, credentials: BaseCredentials | None = None):
+        """Initialize the provider with optional credentials.
+
+        Args:
+            credentials (BaseCredentials | None): Provider-specific credentials.
+                If ``None``, the provider should use its default credential chain.
+        """
+        pass
+
+    @property
+    def credentials(self) -> BaseCredentials:
+        """Return the provider credentials."""
+        raise NotImplementedError("Subclasses must implement this property.")
 
     @abstractmethod
     def get_available_regions(self) -> Sequence[str]:

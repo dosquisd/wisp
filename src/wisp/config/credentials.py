@@ -7,16 +7,27 @@ resolves credentials from (in priority order):
 2. Environment variables / Provider CLI/SDK default chains
 """
 
+from abc import ABC
 from dataclasses import dataclass
 
 from wisp.config.constants import AWS_DEFAULT_REGION, OCI_DEFAULT_COMPARTMENT_ID
 from wisp.config.settings import load_toml_config
 
+
+class BaseCredentials(ABC):
+    """Base class for provider credentials."""
+
+    region: str = ""
+
+    def is_explicitly_configured(self) -> bool:
+        """Return True if any field is explicitly set (not relying on default chain)."""
+        raise NotImplementedError("Subclasses must implement this method.")
+
 # ─── AWS Credentials ─────────────────────────────────────────────
 
 
 @dataclass
-class AWSCredentials:
+class AWSCredentials(BaseCredentials):
     """AWS authentication credentials.
 
     All fields optional — if not set, boto3 default credential chain is used
@@ -61,7 +72,7 @@ class AWSCredentials:
 
 
 @dataclass
-class OCICredentials:
+class OCICredentials(BaseCredentials):
     """OCI authentication credentials.
 
     All fields optional — if not set, OCI SDK default chain is used
