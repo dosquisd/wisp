@@ -4,6 +4,7 @@ Concrete providers implement :class:`BaseProvider`; the mapping from a provider
 name to its class lives in :data:`wisp.providers.PROVIDERS_MAP`.
 """
 
+import enum
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from typing import TypedDict
@@ -12,6 +13,22 @@ from wisp.config.settings import WispConfig
 
 # Progress reporting callback: (message, fraction in [0, 1] or None).
 ProgressCallback = Callable[[str, float | None], None]
+
+
+# Add more provider types as needed (e.g., Azure, GCP, etc.)
+
+
+class ProviderEnum(enum.Enum):
+    """Supported cloud providers."""
+
+    AWS = "aws"
+    OCI = "oci"
+
+
+class CredentialError(RuntimeError):
+    """Raised when provider credentials are invalid or missing."""
+
+    pass
 
 
 class DeployVMResult(TypedDict):
@@ -70,4 +87,10 @@ class BaseProvider(ABC):
         Returns:
             int: Number of deleted resources.
         """
+        pass
+
+    @property
+    @abstractmethod
+    def _provider_name(self) -> str:
+        """Display name for progress messages."""
         pass
