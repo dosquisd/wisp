@@ -1,0 +1,80 @@
+# Wisp configuration file.
+#
+# Copy this file to `wisp.toml` in the project root (or your user config dir)
+# and fill in the values you need. Precedence:
+#   1. User-level file (highest priority, overrides project-level)
+#      - Linux:   ~/.config/wisp/wisp.toml
+#      - macOS:   ~/Library/Application Support/wisp/wisp.toml
+#      - Windows: %APPDATA%\wisp\wisp.toml
+#   2. Project-level: <repo root>/wisp.toml
+#
+# Everything is OPTIONAL. The `[general]` section configures WispConfig
+# (WireGuard / VM boot settings); the `[aws]` and `[oci]` sections configure
+# credentials and provider-specific defaults (such as each provider's own
+# default region — there is NO shared cross-provider default region).
+#
+# When credentials are omitted, wisp falls back to the provider's standard
+# CLI/SDK credential chain:
+#   - AWS: env vars, ~/.aws/credentials, ~/.aws/config, IAM roles
+#   - OCI: ~/.oci/config (profile-based), env vars (OCI_TENANCY, OCI_USER, ...)
+
+
+[general]
+# Default provider used by `wisp` when invoked without a provider argument.
+# Choices: "aws", "oci"
+# default_provider = "aws"        # uncomment to override (defaults to "aws")
+
+# Per-session WispConfig defaults (all optional). When omitted, these fall
+# back to the built-in constants.
+# vm_boot_timeout = 60            # seconds to wait for the VM/SSH to come up
+# wireguard_interface = "wg0"
+# wireguard_ipv4 = "10.66.66.1"
+# wireguard_ipv6 = "fd42:42:42::1"
+# wireguard_dns1 = "1.1.1.1"
+# wireguard_dns2 = "1.0.0.1"
+# wireguard_port = 0              # 0 selects a random port (49152-65535)
+# force_current_ip = false        # restrict firewall + AllowedIPs to /32
+
+
+[aws]
+# All AWS fields are OPTIONAL.
+# If omitted, boto3 uses its default credential chain
+# (env vars / ~/.aws/credentials / ~/.aws/config / IAM roles).
+
+# Default region for AWS deployments (used when no -r/--region is given).
+# region = "us-east-2"
+
+# AWS CLI profile name to use (e.g. "default", "work", "personal").
+# Equivalent to --profile in the AWS CLI.
+# profile = "default"
+
+# Explicit access key. Prefer `profile` over these; credentials in plain text
+# TOML are not recommended for production use.
+# access_key_id = ""
+# secret_access_key = ""
+# session_token = ""
+
+
+[oci]
+# All OCI fields are OPTIONAL.
+# If omitted, the OCI SDK uses its default config chain
+# (~/.oci/config profile, env vars OCI_TENANCY / OCI_USER / OCI_FINGERPRINT /
+# OCI_PRIVATE_KEY_PATH / OCI_REGION).
+
+# Profile name in ~/.oci/config to use (e.g. "DEFAULT", "work").
+# When set, wisp reads the matching [profile] section from ~/.oci/config.
+# profile = "DEFAULT"
+
+# Default region for OCI deployments (used when no -r/--region is given).
+# e.g. "sa-bogota-1", "us-ashburn-1".
+# region = ""
+
+# Alternatively, provide credentials directly (must set ALL of these):
+# tenancy_ocid = ""
+# user_ocid = ""
+# fingerprint = ""
+# private_key_path = ""          # path to the API signing key (PEM)
+
+# Compartment OCID to deploy into. If empty, defaults to the tenancy OCID
+# (root compartment).
+# compartment_ocid = ""
