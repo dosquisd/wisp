@@ -23,6 +23,7 @@ class BaseCredentials(ABC):
         """Return True if any field is explicitly set (not relying on default chain)."""
         raise NotImplementedError("Subclasses must implement this method.")
 
+
 # ─── AWS Credentials ─────────────────────────────────────────────
 
 
