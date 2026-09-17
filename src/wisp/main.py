@@ -13,6 +13,11 @@ import sys
 from typing import TypedDict
 
 from wisp.cli.app import WispApp
+from wisp.config.credentials import (
+    resolve_aws_credentials,
+    resolve_oci_credentials,
+)
+from wisp.config.settings import get_default_provider
 from wisp.providers import PROVIDERS_MAP, ProviderEnum
 from wisp.utils.logger import logger
 
@@ -46,12 +51,13 @@ def parse_args() -> RuntimeArgs:
 
     # Parser for provider argument, which is common to all commands
     provider_parser = argparse.ArgumentParser(add_help=False)
+    default_provider = get_default_provider()
     provider_parser.add_argument(
         "provider",
         nargs="?",
         type=str,
         choices=[provider.value for provider in ProviderEnum],
-        default=ProviderEnum.AWS.value,
+        default=default_provider,
         help="Cloud provider to use (default %(default)s).",
     )
 
@@ -67,8 +73,9 @@ def parse_args() -> RuntimeArgs:
         "-r",
         "--region",
         type=str,
-        default="us-east-2",
-        help="Region where the VM will be deployed (default %(default)s).",
+        default=None,
+        help="Region where the VM will be deployed "
+        "(defaults to the provider's configured region).",
     )
 
     destroy_parser = subparsers.add_parser(
@@ -80,8 +87,9 @@ def parse_args() -> RuntimeArgs:
         "-r",
         "--region",
         type=str,
-        default="us-east-2",
-        help="Region from which VMs will be destroyed (default %(default)s).",
+        default=None,
+        help="Region from which VMs will be destroyed "
+        "(defaults to the provider's configured region).",
     )
 
     subparsers.add_parser(
@@ -105,6 +113,18 @@ def parse_args() -> RuntimeArgs:
         ),
         region=args["region"].lower() if args.get("region") is not None else None,
     )
+
+
+def _create_provider_with_credentials(provider_option: ProviderEnum):
+    """Create provider instance with resolved credentials."""
+    if provider_option == ProviderEnum.AWS:
+        creds = resolve_aws_credentials()
+        return PROVIDERS_MAP[provider_option](credentials=creds)
+    elif provider_option == ProviderEnum.OCI:
+        creds = resolve_oci_credentials()
+        return PROVIDERS_MAP[provider_option](credentials=creds)
+    else:
+        return PROVIDERS_MAP[provider_option]()
 
 
 def main() -> None:
@@ -131,13 +151,16 @@ def main() -> None:
     assert provider_option is not None, (
         "Provider must be specified for deploy, destroy, or regions commands."
     )
-    provider = PROVIDERS_MAP[provider_option]()
+    provider = _create_provider_with_credentials(provider_option)
 
     if command == CommandEnum.REGIONS:
         logger.info(f"Fetching available regions for provider: {provider_option.value}")
         regions = provider.get_available_regions()
         print(f"Available regions:\n{json.dumps(regions, indent=2)}")
         sys.exit(0)
+
+    if region is None:
+        region = provider.credentials.region
 
     # It's not neccesary to do this assertion, because the CLI will always provide a region, but it's a good safety check
     assert region is not None, (
