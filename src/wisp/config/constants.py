@@ -5,6 +5,7 @@ All paths are derived from :data:`ROOTDIR`, which is resolved from this file's
 location (``src/wisp/config/constants.py`` → three parents up = repo root).
 """
 
+import os
 from pathlib import Path
 
 
@@ -19,8 +20,13 @@ def __project_root(anchor: str = "pyproject.toml"):
 
 
 CREATED_BY_TAG: str = "wisp"
-PULUMI_STACK_NAME: str = "wisp-stack"
 PULUMI_PROJECT_NAME: str = "wisp-project"
+
+
+def get_pulumi_stack_name(provider: str) -> str:
+    """Get provider-specific Pulumi stack name."""
+    return f"wisp-stack-{provider}"
+
 
 DEFAULT_TAG = {
     "created-by": CREATED_BY_TAG,
@@ -40,6 +46,40 @@ WIREGUARD_KEYS_DIR = ROOTDIR / "keys"
 WIREGUARD_KEY_PATH = WIREGUARD_KEYS_DIR / "wireguard-key.pem"
 WIREGUARD_CLIENT_CONF_PATH = ROOTDIR / "wireguard-confs" / "wg0-client.conf"
 
+
+def _get_user_config_dir() -> Path:
+    """Get the user-level config directory for Wisp."""
+    from wisp.utils import PlatformEnum  # defer to avoid circular import
+
+    system = PlatformEnum.get_platform()
+    if system == PlatformEnum.WINDOWS:
+        return (
+            Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+            / "wisp"
+        )
+    elif system == PlatformEnum.MACOS:
+        return Path.home() / "Library" / "Application Support" / "wisp"
+
+    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "wisp"
+
+
+def __prepare_config_file(path: Path) -> None:
+    """Ensure the config file exists and is secure (owner-only)."""
+    from wisp.utils.platform import secure_file
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        path.touch()
+    secure_file(path)
+
+
+WISP_CONFIG_FILE_NAME: str = "wisp.toml"
+WISP_PROJECT_CONFIG_PATH = ROOTDIR / WISP_CONFIG_FILE_NAME
+WISP_USER_CONFIG_PATH = _get_user_config_dir() / WISP_CONFIG_FILE_NAME
+
+__prepare_config_file(WISP_USER_CONFIG_PATH)
+__prepare_config_file(WISP_PROJECT_CONFIG_PATH)
+
 # WireGuard defaults (non-interactive installer)
 WIREGUARD_INTERFACE: str = "wg0"
 WIREGUARD_IPV4: str = "10.66.66.1"
@@ -47,3 +87,7 @@ WIREGUARD_IPV6: str = "fd42:42:42::1"
 WIREGUARD_DNS1: str = "1.1.1.1"
 WIREGUARD_DNS2: str = "1.0.0.1"
 WIREGUARD_CLIENT_NAME: str = ""
+
+# Provider default regions
+AWS_DEFAULT_REGION: str = "us-east-2"
+OCI_DEFAULT_COMPARTMENT_ID: str = ""

@@ -8,6 +8,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Label, Select, Static
 
 from wisp.cli.screens.progress import ProgressScreen
+from wisp.providers import PROVIDERS_MAP, ProviderEnum
 
 # Static region list used until live AWS regions are fetched (or if that fails).
 FALLBACK_AWS_REGIONS = [
@@ -21,6 +22,22 @@ FALLBACK_AWS_REGIONS = [
     "ap-southeast-1",
     "ap-northeast-1",
     "sa-east-1",
+]
+
+# Static region list for OCI (fallback)
+FALLBACK_OCI_REGIONS = [
+    "us-ashburn-1",
+    "us-phoenix-1",
+    "eu-frankfurt-1",
+    "uk-london-1",
+    "ap-tokyo-1",
+    "ap-sydney-1",
+    "ap-seoul-1",
+    "ap-mumbai-1",
+    "sa-saopaulo-1",
+    "ca-toronto-1",
+    "eu-zurich-1",
+    "me-jeddah-1",
 ]
 
 
@@ -83,7 +100,10 @@ class DeployScreen(Screen):
                 with Vertical(id="deploy-container"):
                     yield Label("1. Proveedor de Infraestructura:")
                     yield Select(
-                        options=[("Amazon Web Services (AWS)", "aws")],
+                        options=[
+                            ("Amazon Web Services (AWS)", "aws"),
+                            ("Oracle Cloud Infrastructure (OCI)", "oci"),
+                        ],
                         value="aws",
                         allow_blank=False,
                         id="select-provider",
@@ -91,11 +111,12 @@ class DeployScreen(Screen):
 
                     yield Label("2. Región de Despliegue:")
                     current_region = self.app.state.selected_region  # type: ignore[attr-defined]
-                    regions = (
-                        FALLBACK_AWS_REGIONS
-                        if current_region in FALLBACK_AWS_REGIONS
-                        else [current_region, *FALLBACK_AWS_REGIONS]
-                    )
+                    regions = self._get_fallback_regions("aws")
+                    if current_region in regions:
+                        regions = [
+                            current_region,
+                            *[r for r in regions if r != current_region],
+                        ]
                     yield Select(
                         options=[(r, r) for r in regions],
                         value=current_region,
@@ -103,7 +124,7 @@ class DeployScreen(Screen):
                         id="select-region",
                     )
                     yield Static(
-                        "[dim]Sincronizando regiones con AWS...[/dim]",
+                        "[dim]Sincronizando regiones...[/dim]",
                         id="region-status",
                     )
 
@@ -127,6 +148,12 @@ class DeployScreen(Screen):
                     )
         yield Footer()
 
+    def _get_fallback_regions(self, provider: str) -> list[str]:
+        """Get fallback regions for a provider."""
+        if provider == "oci":
+            return FALLBACK_OCI_REGIONS
+        return FALLBACK_AWS_REGIONS
+
     def on_mount(self) -> None:
         self.fetch_live_regions()
 
@@ -137,11 +164,11 @@ class DeployScreen(Screen):
 
     @work(thread=True)
     def fetch_live_regions(self) -> None:
-        """Fetch live AWS regions in a background thread; fall back on error."""
+        """Fetch live regions for the selected provider in a background thread."""
+        provider_val = str(self.query_one("#select-provider", Select).value)
         try:
-            from wisp.providers.aws import AWSProvider
-
-            provider = AWSProvider()
+            provider_cls = PROVIDERS_MAP[ProviderEnum(provider_val)]
+            provider = provider_cls()
             regions = list(provider.get_available_regions())
             if regions:
                 self.app.call_from_thread(self._update_regions_ui, sorted(regions))
@@ -157,9 +184,11 @@ class DeployScreen(Screen):
             region_select.set_options([(r, r) for r in regions])
             region_select.value = current_val
 
+            provider_val = str(self.query_one("#select-provider", Select).value)
+            provider_name = "AWS" if provider_val == "aws" else "OCI"
             status = self.query_one("#region-status", Static)
             status.update(
-                f"[green]✓ {len(regions)} regiones disponibles en AWS[/green]"
+                f"[green]✓ {len(regions)} regiones disponibles en {provider_name}[/green]"
             )
             self.query_one("#deploy-summary", Static).update(
                 self._build_summary(str(current_val))
@@ -170,12 +199,19 @@ class DeployScreen(Screen):
     def _region_fetch_failed(self) -> None:
         try:
             status = self.query_one("#region-status", Static)
-            status.update("[dim](Usando lista estándar de regiones AWS)[/dim]")
+            provider_val = str(self.query_one("#select-provider", Select).value)
+            provider_name = "AWS" if provider_val == "aws" else "OCI"
+            status.update(
+                f"[dim](Usando lista estándar de regiones {provider_name})[/dim]"
+            )
         except Exception:
             pass
 
     def on_select_changed(self, event: Select.Changed) -> None:
-        if event.select.id == "select-region" and event.value is not Select.BLANK:
+        if event.select.id == "select-provider":
+            # Provider changed - fetch new regions
+            self.fetch_live_regions()
+        elif event.select.id == "select-region" and event.value is not Select.BLANK:
             self.query_one("#deploy-summary", Static).update(
                 self._build_summary(str(event.value))
             )
@@ -184,16 +220,28 @@ class DeployScreen(Screen):
         """Build the deployment summary text for the given region."""
         state = self.app.state  # type: ignore[attr-defined]
         cfg = state.config
+        provider_val = str(self.query_one("#select-provider", Select).value)
+        provider_name = "AWS" if provider_val == "aws" else "OCI"
         port_text = (
             f"UDP {cfg.wireguard_port}" if cfg.wireguard_port > 0 else "Aleatorio"
         )
         ip_mode = (
             "Solo tu IP (/32)" if cfg.force_current_ip else "Cualquier IP (0.0.0.0/0)"
         )
+
+        # Credential status
+        creds = state.get_credentials_for_provider(provider_val)
+        cred_status = (
+            "[green]✓ Configurado[/green]"
+            if creds and creds.is_explicitly_configured()
+            else "[yellow]⚠ Auto-detectado[/yellow]"
+        )
+
         return (
-            f"[cyan]Destino:[/cyan] AWS ({region})   [cyan]Timeout:[/cyan] {cfg.vm_boot_timeout}s\n"
+            f"[cyan]Destino:[/cyan] {provider_name} ({region})   [cyan]Timeout:[/cyan] {cfg.vm_boot_timeout}s\n"
             f"[cyan]Puerto:[/cyan] {port_text}   [cyan]DNS:[/cyan] {cfg.wireguard_dns1}, {cfg.wireguard_dns2}\n"
-            f"[cyan]Firewall:[/cyan] {ip_mode}"
+            f"[cyan]Firewall:[/cyan] {ip_mode}\n"
+            f"[cyan]Credenciales:[/cyan] {cred_status}"
         )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:

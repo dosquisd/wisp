@@ -3,13 +3,15 @@
 .venv
 .ruff_cache
 
+# Wisp configuration file
+wisp.toml
+
 # Ignore build artifacts
 build
 **/*.egg-info
 
 # Ignore private keys and inventory files
 keys/*.pem
-inventory/inventory.ini
 
 # Wireguard configuration files
 wireguard-confs/*.conf

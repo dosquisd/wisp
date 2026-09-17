@@ -7,7 +7,7 @@ from textual.containers import Center, Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, ProgressBar, Static
 
-from wisp.providers.aws import AWSProvider
+from wisp.providers import PROVIDERS_MAP, ProviderEnum
 from wisp.providers.base import DeployVMResult
 
 
@@ -92,6 +92,17 @@ class ProgressScreen(Screen):
     def on_mount(self) -> None:
         self.start_deployment()
 
+    def _get_provider(self):
+        """Get the provider instance based on state."""
+        state = self.app.state  # type: ignore[attr-defined]
+        provider_cls = PROVIDERS_MAP[ProviderEnum(state.provider_name)]
+        return provider_cls()
+
+    def _get_provider_name(self) -> str:
+        """Get the provider display name."""
+        state = self.app.state  # type: ignore[attr-defined]
+        return "AWS" if state.provider_name == "aws" else "OCI"
+
     def start_deployment(self) -> None:
         self._set_deploying_ui()
         self.run_deployment_worker()
@@ -106,8 +117,9 @@ class ProgressScreen(Screen):
 
         title.update("[bold cyan]Despliegue en Curso[/bold cyan]")
         state = self.app.state  # type: ignore[attr-defined]
+        provider_name = self._get_provider_name()
         subtitle.update(
-            f"Desplegando en AWS ([yellow]{state.selected_region}[/yellow])..."
+            f"Desplegando en {provider_name} ([yellow]{state.selected_region}[/yellow])..."
         )
         pbar.styles.display = "block"
         pbar.progress = 5
@@ -120,7 +132,7 @@ class ProgressScreen(Screen):
     def run_deployment_worker(self) -> None:
         """Run ``deploy_vm`` off the UI thread, reporting progress and result."""
         state = self.app.state  # type: ignore[attr-defined]
-        provider = AWSProvider()
+        provider = self._get_provider()
 
         def on_progress(msg: str, progress: float | None) -> None:
             self.app.call_from_thread(self._handle_progress, msg, progress)
@@ -198,7 +210,7 @@ class ProgressScreen(Screen):
     def run_destruction_worker(self) -> None:
         """Run ``delete_vm`` off the UI thread, reporting progress and result."""
         state = self.app.state  # type: ignore[attr-defined]
-        provider = AWSProvider()
+        provider = self._get_provider()
 
         def on_progress(msg: str, progress: float | None) -> None:
             self.app.call_from_thread(self._handle_progress, msg, progress)
@@ -247,8 +259,9 @@ class ProgressScreen(Screen):
         results = self.query_one("#results-box", Static)
         buttons = self.query_one("#progress-buttons", Horizontal)
 
+        provider_name = self._get_provider_name()
         title.update("[bold red]Destruyendo Recursos...[/bold red]")
-        subtitle.update("Eliminando instancia EC2 y Security Group en AWS.")
+        subtitle.update(f"Eliminando recursos en {provider_name}.")
         results.styles.display = "none"
         buttons.styles.display = "none"
         pbar.styles.display = "block"
