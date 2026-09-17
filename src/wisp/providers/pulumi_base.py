@@ -23,7 +23,7 @@ from wisp.config.constants import (
     WIREGUARD_KEY_PATH,
     WIREGUARD_KEYS_DIR,
 )
-from wisp.config.settings import WispConfig
+from wisp.config.settings import WispConfig, load_wisp_config
 from wisp.providers.base import BaseProvider, DeployVMResult, ProgressCallback
 from wisp.schemas import InventoryContext
 from wisp.utils import (
@@ -111,7 +111,9 @@ class PulumiProvider(BaseProvider, ABC):
         logger.info(f"Deploying VM in region '{region}' ({self._provider_name})...")
 
         if config is None:
-            config = WispConfig(force_current_ip=force_current_ip)
+            config = load_wisp_config()
+            if force_current_ip:
+                config.force_current_ip = True
         else:
             force_current_ip = config.force_current_ip
 
@@ -128,7 +130,8 @@ class PulumiProvider(BaseProvider, ABC):
                 wireguard_port=config.wireguard_port
                 if config.wireguard_port > 0
                 else None,
-            )
+            ),
+            provider=self._provider_name.lower(),
         )  # type: ignore
         up_result = stack.up()
 
@@ -237,15 +240,14 @@ class PulumiProvider(BaseProvider, ABC):
         logger.debug("Disconnecting WireGuard client...")
         disconnect_response = disconnect_wireguard_client()
         if not disconnect_response.ok:
-            logger.error(
-                f"Failed to disconnect the local WireGuard client: {disconnect_response.message}"
-            )
-            raise RuntimeError(
-                f"Failed to disconnect the local WireGuard client: {disconnect_response.message}"
+            logger.warning(
+                f"WireGuard client disconnect failed (may not be connected): {disconnect_response.message}. "
+                "Continuing with stack destruction."
             )
 
         stack = create_or_select_pulumi_stack(
-            lambda: self._create_pulumi_program(region)
+            lambda: self._create_pulumi_program(region),
+            provider=self._provider_name.lower(),
         )  # type: ignore
 
         logger.debug("Destroying Pulumi stack...")
