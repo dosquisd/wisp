@@ -16,13 +16,21 @@ The Textual terminal UI. For a task-oriented walkthrough see
 
 ## `cli/state.py` — `AppState`
 
-Dataclass of in-memory session state:
+Dataclass of in-memory session state, with TOML-derived defaults:
 
-- `config: WispConfig` (default factory)
-- `provider_name: str = "aws"`
-- `selected_region: str = "us-east-2"`
+- `config: WispConfig` — built via `load_wisp_config()` (from the `[general]`
+  TOML section).
+- `provider_name: str` — from `get_default_provider()` (default `"aws"`).
+- `selected_region: str` — default region for the default provider
+  (`get_default_region_for(provider)`), falling back to `"us-east-2"`.
 - `last_deployment: DeployVMResult | None`
-- `reset_config()` restores a fresh `WispConfig`.
+- `aws_credentials: AWSCredentials` / `oci_credentials: OCICredentials` —
+  resolved credentials.
+- `get_credentials_for_provider(provider_name)` — returns the resolved
+  credentials for `"aws"` or `"oci"`.
+- `refresh_credentials()` — re-resolves credentials from TOML/env after config
+  changes (calls `reload_toml_config()`).
+- `reset_config()` — restores a fresh `WispConfig` from TOML.
 
 ## `cli/__main__.py`
 
@@ -32,10 +40,10 @@ Adds the repo root to `sys.path` and runs `WispApp()` — enables
 ## `cli/screens/`
 
 | Screen | Responsibility |
-|--------|----------------|
+| -------- | ---------------- |
 | `MainMenuScreen` | Banner, live config summary, navigation (`1` deploy, `2` config, `3` quit) |
 | `ConfigScreen` | Edits `WispConfig` in memory with inline validation; Save / Reset / Back |
-| `DeployScreen` | Provider + region selection; fetches live AWS regions in a worker thread (fallback list on failure); pushes `ProgressScreen` |
+| `DeployScreen` | Provider (aws and oci today — see `ProviderEnum` ([`providers/base.py`](../../src/wisp/providers/base.py)) for the current list) + region selection; fetches live regions in a worker thread (fallback list on failure); pushes `ProgressScreen` |
 | `ProgressScreen` | Runs `deploy_vm`/`delete_vm` in a worker thread, marshals progress to the UI via `call_from_thread`, shows results and a Destroy button |
 
 ### Threading note

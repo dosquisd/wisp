@@ -1,37 +1,35 @@
 # `wisp.utils`
 
 Shared helpers. `utils/__init__.py` re-exports the common ones and uses module
-`__getattr__` for lazy imports of the heavier Pulumi/Jinja helpers.
+`__getattr__` for lazy imports of the heavier Pulumi helpers.
 
 ## Exports
 
-`get_ansible_playbook_bin`, `get_public_ip`, `get_random_generator`,
-`get_wireguard_port`, `logger`. Lazily via `__getattr__`:
-`create_or_select_pulumi_stack`, `render_inventory_template`.
+`get_public_ip`, `get_random_generator`, `get_wireguard_port`, `logger`,
+`PlatformEnum`, `secure_file`. Lazily via `__getattr__`:
+`create_or_select_pulumi_stack`.
 
 ## `utils/__init__.py`
 
 - `get_public_ip() -> str` — GETs `https://api.ipify.org`.
-- `__getattr__(name)` — lazy-imports `create_or_select_pulumi_stack` and
-  `render_inventory_template` on first access; raises `AttributeError` otherwise.
-
-## `utils/ansible.py`
-
-- `get_ansible_playbook_bin() -> str` — resolves `ansible-playbook`, preferring a
-  global install on `PATH` (outside the current venv) over the venv binary.
-  Raises `FileNotFoundError` with guidance if neither is found.
-- Helpers: `_find_global_bin`, `_find_local_bin`, `_is_within`.
+- `__getattr__(name)` — lazy-imports `create_or_select_pulumi_stack` on first
+  access; raises `AttributeError` otherwise.
 
 ## `utils/pulumi.py`
 
-- `create_or_select_pulumi_stack(program=None, *, stack_name=PULUMI_STACK_NAME, project_name=PULUMI_PROJECT_NAME) -> auto.Stack`
-  — wraps `pulumi.automation.create_or_select_stack`.
+- `create_or_select_pulumi_stack(program=None, *, provider="aws", project_name=PULUMI_PROJECT_NAME) -> auto.Stack`
+  — wraps `pulumi.automation.create_or_select_stack` with a provider-specific
+  stack name via `get_pulumi_stack_name(provider)` (e.g. `wisp-stack-aws`,
+  `wisp-stack-oci`).
 
-## `utils/templates.py`
+## `utils/platform.py`
 
-- `render_inventory_template(template_path, output_path, context, mode=0o644) -> None`
-  — renders a Jinja2 template (loaded from `/` via `FileSystemLoader`) with the
-  `InventoryContext` and writes the output with the given file mode.
+- `PlatformEnum(StrEnum)`: `LINUX`, `WINDOWS`, `MACOS`; `get_platform()` maps
+  `platform.system()` to the enum.
+- `secure_file(path, platform_enum=None)` — restricts a sensitive file:
+  `0600` (owner-only) on Linux/macOS; on Windows, `icacls` with well-known SIDs
+  (`*S-1-5-18:F` for SYSTEM, `*S-1-5-32-544:F` for Administrators) because
+  account names are localized on non-English Windows installations.
 
 ## `utils/randoms.py`
 

@@ -35,14 +35,15 @@ The provider abstraction is designed for extension.
 2. Add a value to `ProviderEnum` and register the class in `PROVIDERS_MAP`
    (`providers/__init__.py`).
 3. Reuse the shared building blocks where possible: `WispConfig`, the
-   `InventoryContext` + Ansible flow (`wireguard/remote_server.py`), and the
-   local client (`wireguard/local_client.py`).
+   shared `PulumiProvider` deploy/destroy flow (`providers/pulumi_base.py`),
+   and the local client (`wireguard/local_client.py`).
 4. Follow the deploy contract: provision → wait for boot → persist SSH key →
-   render inventory → run Ansible → connect the local client. See
+   configure the remote server (SSH/SFTP) → connect the local client. See
    [deployment flow](./deployment-flow.md).
 
-The TUI's `DeployScreen` currently hardcodes AWS as the only provider option; a
-new provider would also need to be surfaced there.
+The TUI's `DeployScreen` currently declares its provider options inline
+(AWS and OCI); a new provider would also need to be added to that `Select`
+widget.
 
 ## Documentation
 
@@ -54,3 +55,12 @@ signatures.
 
 The history uses Conventional Commits (`feat:`, `fix:`, `refactor:`, `style:`,
 `chore:`, `docs:`). Match that style. Open pull requests against `main`.
+
+## Language and conventions
+
+- All documentation, docstrings, CLI help strings, and code comments are written
+  in **English**.
+- Docstrings follow **PEP 257** (with Google-style `Args:` / `Returns:` /
+  `Raises:` sections) and the code follows **PEP 8** as enforced by Ruff.
+- Keep platform differences explicit (Linux/macOS vs Windows) wherever the
+  behavior differs (daemon transport, file permissions, setup scripts).
