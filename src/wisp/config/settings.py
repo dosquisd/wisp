@@ -57,11 +57,14 @@ def _read_toml_file(path: Path) -> dict[str, Any]:
 def load_toml_config() -> dict[str, Any]:
     """Load the global TOML configuration (cached after first load).
 
-    Search order (later files override earlier ones):
-    1. User-level: ``~/.config/wisp/wisp.toml`` (Linux),
+    Search order (later files override earlier ones, key by key):
+    1. Project-level: ``<repo root>/wisp.toml``.
+    2. User-level: ``~/.config/wisp/wisp.toml`` (Linux),
        ``~/Library/Application Support/wisp/wisp.toml`` (macOS),
-       ``%APPDATA%\\wisp\\wisp.toml`` (Windows).
-    2. Project-level: ``<repo root>/wisp.toml``.
+       ``%APPDATA%\\wisp\\wisp.toml`` (Windows) — **wins** on any key set
+       in both, since it's the file meant to follow you across projects.
+       See :func:`get_active_config_path` for the single-file equivalent
+       of this rule (used as the write target when the TUI saves).
 
     The parsed result is cached; subsequent calls return the same merged
     dict without re-reading the files. Use :func:`reload_toml_config` to
@@ -92,14 +95,19 @@ def reload_toml_config() -> dict[str, Any]:
 
 
 def _merge_toml_files() -> dict[str, Any]:
-    """Read and merge user-level + project-level TOML files (no caching)."""
+    """Read and merge project-level + user-level TOML files (no caching).
+
+    Iterated in this order (project first, user second) so that, per
+    section, ``dict.update`` lets the user-level value win on shared keys —
+    see :func:`get_active_config_path` for why user-level takes priority.
+    """
     config: dict[str, Any] = {}
 
-    for path in (WISP_USER_CONFIG_PATH, WISP_PROJECT_CONFIG_PATH):
+    for path in (WISP_PROJECT_CONFIG_PATH, WISP_USER_CONFIG_PATH):
         parsed = _read_toml_file(path)
         if not parsed:
             continue
-        # Merge section by section so project-level keys override user-level.
+        # Merge section by section so user-level keys override project-level.
         for section, values in parsed.items():
             if section not in config:
                 config[section] = {}
@@ -107,6 +115,52 @@ def _merge_toml_files() -> dict[str, Any]:
                 config[section].update(values)
 
     return config
+
+
+def get_active_config_path() -> Path:
+    """Return the single wisp.toml that reads/writes should treat as primary.
+
+    :func:`load_toml_config` already merges *both* files for reading, with
+    the user-level file winning key by key. But a single canonical file is
+    still needed as the *write* target — e.g. for the TUI's "Guardar" action
+    — so this is the one place that decides which file that is, instead of
+    every caller re-deriving it with its own little existence check (which
+    is exactly the kind of scattered logic this function replaces).
+
+    Preference order:
+    1. The user-level file, if it has any parsed content.
+    2. The project-level file, if *that* has content (and the user-level
+       one doesn't).
+    3. The user-level path, as the default target for a first-ever save —
+       both files always exist on disk (see
+       :func:`wisp.config.constants.__prepare_config_file`), just possibly
+       empty, so "has content" is the only meaningful distinguishing check.
+    """
+    if _read_toml_file(WISP_USER_CONFIG_PATH):
+        return WISP_USER_CONFIG_PATH
+    if _read_toml_file(WISP_PROJECT_CONFIG_PATH):
+        return WISP_PROJECT_CONFIG_PATH
+    return WISP_USER_CONFIG_PATH
+
+
+def describe_config_sources() -> str:
+    """Rich-markup one-liner on which wisp.toml is active, for TUI/log display.
+
+    Flags the ambiguous case explicitly (both files have data) instead of
+    silently picking one, since that's exactly the situation that made this
+    worth a dedicated notice in the first place.
+    """
+    user_has_data = bool(_read_toml_file(WISP_USER_CONFIG_PATH))
+    project_has_data = bool(_read_toml_file(WISP_PROJECT_CONFIG_PATH))
+    active = get_active_config_path()
+
+    if user_has_data and project_has_data:
+        return (
+            f"[yellow]⚠[/yellow] Hay dos wisp.toml con datos (usuario y proyecto). "
+            f"Usando el de [bold]usuario[/bold]: [cyan]{active}[/cyan] — el de "
+            f"proyecto solo rellena claves que ese no defina."
+        )
+    return f"[dim]Config activa:[/dim] [cyan]{active}[/cyan]"
 
 
 def get_default_provider() -> str:
@@ -127,6 +181,80 @@ def get_default_region_for(provider: str) -> str:
         str: The configured region, or ``""`` if not set.
     """
     return str(load_toml_config().get(provider, {}).get("region", ""))
+
+
+# ─── Writing back to disk ─────────────────────────────────────────
+
+
+def _write_toml_raw(path: Path, data: dict[str, Any]) -> None:
+    """Write ``data`` as TOML to a single file, creating/securing it.
+
+    Requires the ``tomli-w`` package (``tomllib`` is read-only, by design —
+    it has no writer). Add it to the project's dependencies if it isn't
+    there yet: ``uv add tomli-w``.
+    """
+    import tomli_w
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as f:
+        tomli_w.dump(data, f)
+
+    from wisp.utils.platform import secure_file  # deferred: avoid import cycle
+
+    secure_file(path)
+
+
+def save_session_config(
+    cfg: "WispConfig",
+    provider_regions: dict[str, str] | None = None,
+    path: Path | None = None,
+) -> Path:
+    """Persist ``cfg`` (and optionally per-provider regions) to one wisp.toml.
+
+    Only two things in the target file are touched:
+    - The ``[general]`` section is *updated* (not replaced) with ``cfg``'s
+      fields, so unrelated keys already there — e.g. ``default_provider``,
+      which lives in ``[general]`` but isn't part of :class:`WispConfig` —
+      survive the save.
+    - For each ``provider: region`` pair in ``provider_regions``, only that
+      section's ``region`` key is set (or removed, if ``region`` is empty).
+      Everything else in that section (credentials, profile, etc.) is left
+      exactly as-is — this function never writes secrets.
+
+    The *other* wisp.toml (project vs. user) is never touched. Defaults to
+    :func:`get_active_config_path` when ``path`` isn't given.
+
+    Returns:
+        Path: The file that was actually written, so the caller can tell
+            the user where their settings went.
+    """
+    target = path or get_active_config_path()
+    data = _read_toml_file(target)
+
+    general_section = data.setdefault("general", {})
+    general_section.update(
+        {
+            "vm_boot_timeout": cfg.vm_boot_timeout,
+            "wireguard_interface": cfg.wireguard_interface,
+            "wireguard_ipv4": cfg.wireguard_ipv4,
+            "wireguard_ipv6": cfg.wireguard_ipv6,
+            "wireguard_dns1": cfg.wireguard_dns1,
+            "wireguard_dns2": cfg.wireguard_dns2,
+            "wireguard_port": cfg.wireguard_port,
+            "force_current_ip": cfg.force_current_ip,
+        }
+    )
+
+    for provider, region in (provider_regions or {}).items():
+        section = data.setdefault(provider, {})
+        if region:
+            section["region"] = region
+        else:
+            section.pop("region", None)
+
+    _write_toml_raw(target, data)
+    reload_toml_config()
+    return target
 
 
 # ─── Per-session configuration ───────────────────────────────────
