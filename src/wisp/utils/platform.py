@@ -1,4 +1,5 @@
 import enum
+import getpass
 import platform
 import subprocess
 from pathlib import Path
@@ -40,14 +41,24 @@ def secure_file(path: Path, platform_enum: PlatformEnum | None = None) -> None:
         case PlatformEnum.LINUX | PlatformEnum.MACOS:
             path.chmod(0o600)
         case PlatformEnum.WINDOWS:
+            username = getpass.getuser()
+            grants = [
+                "*S-1-5-18:F",  # NT AUTHORITY\SYSTEM
+                "*S-1-5-32-544:F",  # BUILTIN\Administrators
+            ]
+
+            # LocalSystem can report the computer account (HOSTNAME$), which
+            # is not resolvable by icacls. SYSTEM already has the required access.
+            if not username.endswith("$"):
+                grants.append(f"{username}:F")
+
             subprocess.run(
                 [
                     "icacls",
                     str(path),
                     "/inheritance:r",
                     "/grant:r",
-                    "*S-1-5-18:F",  # NT AUTHORITY\SYSTEM
-                    "*S-1-5-32-544:F",  # BUILTIN\Administrators
+                    *grants,
                 ],
                 check=True,
                 capture_output=True,
