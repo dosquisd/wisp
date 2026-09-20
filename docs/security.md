@@ -6,24 +6,30 @@ The client-side WireGuard interface requires root to bring up/down. Rather than
 running the whole application as root, Wisp splits privileges:
 
 - The **unprivileged frontend** (CLI/TUI) runs as your user.
-- A **root daemon** (`wisp.service`, socket-activated by `wisp.socket`) performs
-  the privileged operations (`wg-quick up/down`, writing
-  `/etc/wireguard/wg0.conf`).
+- A **privileged daemon** (`wisp.service`, socket-activated by `wisp.socket` on
+  Linux; native Windows Service via pywin32 on Windows) performs the privileged
+  operations (`wg-quick up/down`, writing the WireGuard config).
 
-They communicate over a Unix domain socket at `/run/wisp.sock`.
+They communicate over a Unix domain socket at `/run/wisp.sock` (Linux/macOS) or
+a Named Pipe (`\\.\pipe\wisp`) on Windows.
 
 ### Socket access control
 
-From `packaging/wisp.socket`:
+From `packaging/wisp.socket` (Linux):
 
 - `SocketMode=0660`
 - `SocketUser=root`
 - `SocketGroup=wisp`
 
 Only root and members of the `wisp` group can connect. `setup.sh` creates the
-`wisp` group and adds the installing user. Group membership requires a re-login
-(or `newgrp wisp`) to take effect; until then, `local_client._send` raises a
+`wisp` group and adds the installing user (`setup.ps1` does the equivalent on
+Windows with a local group). Group membership requires a re-login
+(or `newgrp wisp`) to take effect; until then, connecting to the daemon raises a
 `PermissionError` with guidance.
+
+On Windows, the Named Pipe security descriptor grants full control to SYSTEM
+and built-in Administrators, and read/write to the `wisp` group — implemented
+with well-known SIDs in `daemon/transport.py`.
 
 ### Protocol
 
@@ -33,29 +39,30 @@ Only root and members of the `wisp` group can connect. `setup.sh` creates the
 - `Response { ok: bool, message: str }`
 
 The daemon (`daemon/server.py`) handles one request per connection and dispatches
-to `handle_connect` / `handle_disconnect` / `handle_status`.
+to the platform adapter for `connect` / `disconnect` / `status`.
 
-> Note: the daemon writes whatever `config_content` it receives to
-> `/etc/wireguard/wg0.conf` and runs `wg-quick`. Access to the socket is
+> Note: the daemon writes whatever `config_content` it receives to the WireGuard
+> config file and brings the interface up. Access to the socket/pipe is
 > therefore equivalent to control over the local WireGuard interface — which is
-> why the socket is restricted to the `wisp` group.
+> why it is restricted to the `wisp` group.
 
 ## Keys and secrets
 
-- A fresh **ED25519 key pair** is generated per deployment via `pulumi-tls`. The
+- A fresh **RSA 4096 key pair** is generated per deployment via `pulumi-tls`. The
   private key is a Pulumi stack output.
 - The private key is written locally to `keys/wireguard-key.pem` with mode
-  `0600` and used as the SSH key for Ansible.
-- On destroy, the key file, rendered inventory, and client config are removed.
-- `keys/*.pem`, `inventory/inventory.ini`, and `wireguard-confs/*.conf` are
-  gitignored so secrets are not committed.
+  `0600` (Linux/macOS) or secured via `icacls` with well-known SIDs (Windows),
+  and used as the SSH key for the remote server configuration.
+- On destroy, the key file and client config are removed.
+- `keys/*.pem` and `wireguard-confs/*.conf` are gitignored so secrets are not
+  committed.
 
 ## Firewall exposure
 
-The EC2 security group opens:
+The security group (AWS) or security list (OCI) opens:
 
 - UDP up to the WireGuard port (the tunnel).
-- TCP 22 (SSH, needed for Ansible).
+- TCP 22 (SSH, for the remote server configuration).
 - All egress.
 
 Ingress source is controlled by `force_current_ip`:
@@ -71,11 +78,11 @@ stable.
 ## Trust boundaries summary
 
 | Boundary | Mechanism | Notes |
-|----------|-----------|-------|
-| User ↔ daemon | Unix socket `0660 root:wisp` | Group-gated privileged control |
-| Local ↔ VM | SSH with generated ED25519 key | Key stored `0600`, removed on destroy |
-| Internet ↔ VM | EC2 security group | Optionally pinned to your `/32` |
-| AWS API | Your AWS credentials/environment | Wisp does not manage credentials |
+| ---------- | ----------- | ------- |
+| User ↔ daemon | Unix socket `0660 root:wisp` (Linux/macOS) or Named Pipe with SIDs (Windows) | Group-gated privileged control |
+| Local ↔ VM | SSH with generated RSA 4096 key | Key stored `0600`/icacls, removed on destroy |
+| Internet ↔ VM | Cloud security group/list | Optionally pinned to your `/32` |
+| Cloud API | Your cloud credentials/environment | Wisp does not manage credentials; uses default chain or `wisp.toml` config |
 
 ## Operational cautions
 
