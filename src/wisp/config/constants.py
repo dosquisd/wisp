@@ -6,6 +6,7 @@ location (``src/wisp/config/constants.py`` → three parents up = repo root).
 """
 
 import os
+import platform
 from pathlib import Path
 
 
@@ -49,15 +50,13 @@ WIREGUARD_CLIENT_CONF_PATH = ROOTDIR / "wireguard-confs" / "wg0-client.conf"
 
 def _get_user_config_dir() -> Path:
     """Get the user-level config directory for Wisp."""
-    from wisp.utils import PlatformEnum  # defer to avoid circular import
-
-    system = PlatformEnum.get_platform()
-    if system == PlatformEnum.WINDOWS:
+    system = platform.system().lower()
+    if system == "windows":
         return (
             Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
             / "wisp"
         )
-    elif system == PlatformEnum.MACOS:
+    elif system == "darwin":
         return Path.home() / "Library" / "Application Support" / "wisp"
 
     return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "wisp"
