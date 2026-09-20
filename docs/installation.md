@@ -2,33 +2,19 @@
 
 ## Requirements
 
-- **Linux** host for the client (the daemon uses systemd socket activation and
-  `wg-quick`). The repository's shell scripts support Debian/Ubuntu, Fedora,
-  CentOS/AlmaLinux/Rocky, Oracle Linux, Arch, and Alpine.
+- Linux/macOS host for the client (the daemon uses systemd socket activation on
+  Linux, or a native Windows service + Named Pipes on Windows; the macOS adapter
+  is not implemented yet — see `MacOSAdapter`
+  in [`daemon/adapter.py`](../src/wisp/daemon/adapter.py)).
 - **Python 3.14+** (see `.python-version` and `requires-python` in
   `pyproject.toml`).
-- **WireGuard tools** (`wg`, `wg-quick`) on the client — installed by `setup.sh`.
-- **Pulumi CLI** — installed by `setup.sh` unless `--skip-pulumi` is passed.
-- **AWS credentials** available in the environment (for example via the AWS CLI
-  or environment variables), with permissions to manage EC2 instances, security
-  groups, and key pairs.
-- **`ansible-playbook`** available either globally or in the project virtualenv
-  (`ansible-core` is a declared dependency).
-
-## Python dependencies
-
-Declared in `pyproject.toml`:
-
-- `pulumi` (`>=3,<4`) and `pulumi-aws` (`>=7,<8`) — infrastructure provisioning.
-- `pulumi-tls` — generates the ED25519 key pair for SSH.
-- `ansible-core` — configures the remote WireGuard server.
-- `boto3` — lists available AWS regions.
-- `jinja2` — renders the Ansible inventory template.
-- `textual` — the terminal UI.
-- `tqdm` — CLI-mode progress bar.
-
-The project uses [`uv`](https://docs.astral.sh/uv/) (there is a `uv.lock`). A
-console script entry point `wisp = "wisp.main:main"` is defined.
+- **WireGuard tools** (`wg`, `wg-quick`) on the client — installed by `setup.sh`
+  (Linux/macOS) or `setup.ps1` (Windows).
+- **Pulumi CLI** — installed by `setup.sh` (Linux/macOS) or `setup.ps1` (Windows)
+  unless `--skip-pulumi` is passed.
+- **Cloud credentials** available in the environment (for example via the AWS
+  CLI, `~/.aws/credentials`, or `~/.oci/config`), with permissions to manage
+  instances, security rules, and key pairs, **or** configured in `wisp.toml`.
 
 ## Installing the CLI
 
@@ -38,7 +24,9 @@ Install the package as an editable tool so the `wisp` command is available:
 uv tool install --editable .
 ```
 
-## Installing the privileged daemon (`setup.sh`)
+## Installing the privileged daemon
+
+### Linux/macOS
 
 The client-side daemon must run as root so it can bring the local WireGuard
 interface up and down. `setup.sh` installs it. **Run it as root** (it checks and
@@ -53,14 +41,14 @@ sudo ./setup.sh --skip-pulumi
 What `setup.sh` does, in order:
 
 1. `initialCheck` — asserts it is running as root and detects the OS.
-2. `ensureCurl` — installs `curl` if missing (needed to fetch Pulumi).
-3. `installWireGuardClient` — installs WireGuard tools for the detected OS and
-   verifies `wg` is available.
+2. `installWireGuardClient` — installs WireGuard tools for the detected OS and
+   verifies `wg` is available (shared helper from `scripts/utils.sh`).
+3. `ensureCurl` — installs `curl` if missing (needed to fetch Pulumi).
 4. `installPulumi` — detects Pulumi in the root or invoking user's environment;
-  if it is missing, installs it for the invoking user under `~/.pulumi`
-  (skipped with `--skip-pulumi`).
+   if it is missing, installs it for the invoking user under `~/.pulumi`
+   (skipped with `--skip-pulumi`).
 5. `removeExistingInstallation` — stops and disables the previous service and
-  socket, removes their systemd unit files and clears the old daemon files.
+   socket, removes their systemd unit files and clears the old daemon files.
 6. `createWispGroup` — creates the `wisp` group and adds the invoking user
    (`$SUDO_USER`) to it. This group gates access to the daemon socket.
 7. `installDaemonFiles` — copies `src/` to `/usr/local/lib/wisp/src` and creates
@@ -72,22 +60,38 @@ What `setup.sh` does, in order:
 > new `wisp` group membership takes effect. Until then, connecting to the daemon
 > socket fails with a `PermissionError`.
 
-## systemd units
+### Windows
 
-`packaging/wisp.socket`:
+The installation is performed with `setup.ps1`, which installs WireGuard Windows
+exe, Pulumi via `winget`, and a native Windows service for the daemon.
 
-- Listens on `/run/wisp.sock`.
-- `SocketMode=0660`, `SocketUser=root`, `SocketGroup=wisp` — only root and
-  members of `wisp` can connect.
+The `setup.ps1` script performs the following steps:
 
-`packaging/wisp.service`:
+1. Requires administrator privileges.
+2. Installs `uv` if not already present.
+3. Installs Pulumi via `winget`.
+4. Installs WireGuard Windows exe.
+5. Creates the `wisp` local group and adds the current user to it.
+6. Copies the source code and Python dependencies to the installation directory.
+7. Installs the Python virtual environment and Wisp into it.
+8. Installs the Wisp Windows service.
+9. Starts the Wisp service.
 
-- `Requires=wisp.socket` (socket-activated).
-- Runs `python -m wisp.daemon.server` as `User=root` from
-  `/usr/local/lib/wisp/src/`.
+The daemon supports both systemd socket activation (Linux) and Windows Named
+Pipes (`WindowsNamedPipeTransport`) for communication with the CLI/TUI.
 
-The daemon supports both systemd socket activation (`LISTEN_FDS` / fd 3) and, for
-local development, creating the socket directly at `SOCKET_PATH`.
+## Python dependencies
+
+Declared in `pyproject.toml`:
+
+- `pulumi` (`>=3,<4`) and `pulumi-aws` (`>=7,<8`) — infrastructure provisioning.
+- `pulumi-oci` (`>=4.22.0`) — OCI provider support.
+- `pulumi-tls` — generates the RSA 4096 key pair for SSH.
+- `boto3` — lists available AWS regions.
+- `oci` — OCI SDK (regions, credentials).
+- `paramiko` — SSH/SFTP remote server configuration.
+- `textual` — the terminal UI.
+- `tqdm` — CLI-mode progress bar.
 
 ## Runtime directories
 
@@ -95,8 +99,7 @@ These are created/populated at runtime and are gitignored:
 
 | Path | Contents |
 | ------ | ---------- |
-| `keys/wireguard-key.pem` | SSH/WireGuard private key (mode `0600`) |
-| `inventory/inventory.ini` | Rendered Ansible inventory |
+| `keys/wireguard-key.pem` | SSH/WireGuard private key (`0600` on Linux/macOS, icacls on Windows) |
 | `wireguard-confs/wg0-client.conf` | Client config fetched from the VM |
 | `logs/wisp.log` | Rotating log (5 MB × 5 backups) |
 

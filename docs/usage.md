@@ -12,19 +12,33 @@ wisp destroy    # CLI: destroy VMs
 wisp regions    # CLI: list available regions
 ```
 
-You can also launch the TUI directly with `python -m wisp.cli`.
-
 ## CLI subcommands
 
-Every subcommand accepts a positional `provider` argument (default `aws`, the
-only currently supported value).
+Every subcommand accepts a positional `provider` argument (default `aws`;
+`aws` and `oci` today — see `ProviderEnum` for the current list).
+
+> **Note:** Wisp ships with support for `aws` and `oci` as of this writing, and
+> the provider layer is extensible. For the current list, see `ProviderEnum`
+> ([`src/wisp/providers/base.py`](../src/wisp/providers/base.py)) and
+> `PROVIDERS_MAP`
+> ([`src/wisp/providers/__init__.py`](../src/wisp/providers/__init__.py)).
 
 ### `wisp deploy [provider] [-r/--region REGION]`
 
 Provisions a VM and brings the tunnel up.
 
-- `provider` — cloud provider (default `aws`).
-- `-r`, `--region` — target region (default `us-east-2`).
+- `provider` — cloud provider (`aws` or `oci`, default `aws`).
+- `-r`, `--region` — target region. If omitted, the region is resolved from
+  the provider configuration in `wisp.toml` (`[aws].region` or `[oci].region`).
+  There is no cross-provider default region.
+
+**Examples:**
+
+```bash
+wisp deploy aws --region eu-west-1
+wisp deploy oci            # uses the default region from [oci] in wisp.toml
+wisp deploy aws -r sa-north-1
+```
 
 Prints the deployment result as JSON, e.g.:
 
@@ -37,12 +51,6 @@ Prints the deployment result as JSON, e.g.:
 }
 ```
 
-Example:
-
-```bash
-wisp deploy aws --region eu-west-1
-```
-
 ### `wisp destroy [provider] [-r/--region REGION]`
 
 Disconnects the local client, destroys the Pulumi stack, and removes local
@@ -52,15 +60,19 @@ resources:
 ```bash
 wisp destroy aws -r eu-west-1
 # → Deleted VM. Count: 4
+
+wisp destroy oci -r sa-bogota-1
+# → Deleted VM. Count: 2
 ```
 
 ### `wisp regions [provider]`
 
-Lists the regions available for the provider (AWS: via
-`boto3` `describe_regions`). Prints a JSON array.
+Lists the regions available for the provider (AWS via `boto3` `describe_regions`
+or OCI via the Identity API). Prints a JSON array.
 
 ```bash
 wisp regions aws
+wisp regions oci
 ```
 
 ## CLI vs TUI behaviour
@@ -75,18 +87,19 @@ wisp regions aws
 Argument parsing normalizes `command`, `provider`, and `region` to lowercase. If
 no command is given, it defaults to the TUI.
 
+> Note: the TUI's user-facing strings are currently in Spanish; all
+> documentation and CLI arguments are in English.
+
 ## The TUI
 
 The TUI is built with [Textual](https://textual.textualize.io/). Global styles
 and screen registration live in `cli/app.py`; per-session state lives in
 `cli/state.py` (`AppState`).
 
-> Note: the TUI's user-facing strings are currently in Spanish.
-
 ### Screens
 
 | Screen | File | Purpose |
-|--------|------|---------|
+| ------ | ---- | ------ |
 | Main menu | `screens/main_menu.py` | Entry point; shows current config summary; navigate to Deploy/Config/Quit |
 | Configuration | `screens/config.py` | Edit per-session `WispConfig` (in memory) |
 | Deploy | `screens/deploy.py` | Pick provider + region, review summary, start deploy |
@@ -101,9 +114,9 @@ and screen registration live in `cli/app.py`; per-session state lives in
 
 Edits an in-memory `WispConfig` for the session (not persisted to disk). Fields:
 
-- Ansible timeout (seconds, minimum 5)
-- WireGuard port (`0` = random in `49152–65535`, otherwise `0–65535`)
-- WireGuard interface (non-empty)
+- `vm_boot_timeout` (seconds, minimum 5)
+- `wireguard_port` (`0` = random in `49152–65535`, otherwise `0–65535`)
+- `wireguard_interface` (non-empty)
 - Primary / secondary DNS (both non-empty)
 - Restrict access to your current public IP only (toggle → `/32` firewall rule)
 
@@ -112,16 +125,15 @@ Validation errors are shown inline. "Save" stores to the in-memory `AppState`;
 
 ### Deploy screen
 
-- Provider select (AWS only).
-- Region select. On mount, it fetches live AWS regions in a background thread
-  (`boto3`); if that fails it falls back to a built-in region list.
-- A summary reflects the current config; "Iniciar Despliegue" pushes the
+- Provider select (`aws` or `oci`).
+- Region select. On mount, it fetches live regions in a background thread.
+- A summary reflects the current config; "Start Deployment" pushes the
   Progress screen which runs the deployment in a worker thread.
 
 ### Progress screen
 
-- Runs `deploy_vm` / `delete_vm` in a worker thread and marshals progress back to
-  the UI thread via `call_from_thread`.
-- On success, shows instance ID, public IP, WireGuard port, and private IP, plus
-  a "Destruir VPN" button that runs the destroy flow.
+- Runs `deploy_vm` / `delete_vm` in a worker thread and marshals progress back
+  to the UI thread via `call_from_thread`.
+- On success, shows instance ID, public IP, WireGuard port, and private IP,
+  plus a "Destroy VPN" button that runs the destroy flow.
 - On error, shows the exception message.
