@@ -7,10 +7,12 @@ resolves credentials from (in priority order):
 2. Environment variables / Provider CLI/SDK default chains
 """
 
+import configparser
 from abc import ABC
 from dataclasses import dataclass
+from pathlib import Path
 
-from wisp.config.constants import AWS_DEFAULT_REGION, OCI_DEFAULT_COMPARTMENT_ID
+from wisp.config.constants import OCI_DEFAULT_COMPARTMENT_ID
 from wisp.config.settings import load_toml_config
 
 
@@ -128,21 +130,94 @@ class OCICredentials(BaseCredentials):
 # ─── Resolution Functions ────────────────────────────────────────tions ────────────────────────────────────────
 
 
-def resolve_aws_credentials() -> AWSCredentials:
-    """Resolve AWS credentials from TOML config + SDK defaults.
+def _read_aws_cli_files(profile: str) -> dict[str, str]:
+    """Best-effort, network-free peek at ``~/.aws/{credentials,config}``.
 
-    Values set in ``wisp.toml`` take priority; anything not set falls back to
-    boto3's default credential chain (env vars, ~/.aws/credentials, IAM roles).
+    Mirrors what :func:`resolve_oci_credentials` already does via the OCI
+    SDK's own config loader — AWS just doesn't ship an equivalent
+    ``from_file()`` helper we can call the same way, so this reads the same
+    two INI files the AWS CLI itself reads. Never touches the network (no
+    STS calls, no instance-metadata lookups): this only tells us whether
+    *something* is on disk, not whether it's actually valid.
+
+    Args:
+        profile: Profile name from ``wisp.toml``, or ``""`` for the
+            AWS CLI's own "default" profile.
+
+    Returns:
+        dict[str, str]: Whichever of ``region``/``access_key_id``/
+            ``secret_access_key``/``session_token`` it found. Empty if the
+            files don't exist or don't have that profile.
+    """
+    creds_section = profile or "default"
+    config_section = f"profile {profile}" if profile else "default"
+    found: dict[str, str] = {}
+
+    creds_path = Path.home() / ".aws" / "credentials"
+    if creds_path.is_file():
+        parser = configparser.ConfigParser()
+        try:
+            parser.read(creds_path)
+        except configparser.Error:
+            parser = None
+        if parser is not None and parser.has_section(creds_section):
+            section = parser[creds_section]
+            for toml_key, ini_key in (
+                ("access_key_id", "aws_access_key_id"),
+                ("secret_access_key", "aws_secret_access_key"),
+                ("session_token", "aws_session_token"),
+            ):
+                if section.get(ini_key):
+                    found[toml_key] = section[ini_key]
+
+    config_path = Path.home() / ".aws" / "config"
+    if config_path.is_file():
+        parser = configparser.ConfigParser()
+        try:
+            parser.read(config_path)
+        except configparser.Error:
+            parser = None
+        if parser is not None and parser.has_section(config_section):
+            region = parser[config_section].get("region")
+            if region:
+                found["region"] = region
+
+    return found
+
+
+def resolve_aws_credentials() -> AWSCredentials:
+    """Resolve AWS credentials from TOML config + the AWS CLI's own files.
+
+    Values set in ``wisp.toml`` take priority; anything not set there falls
+    back to whatever ``~/.aws/credentials`` / ``~/.aws/config`` already have
+    for that profile (this is what previously only happened for OCI —
+    without it, a perfectly normal ``aws configure`` setup showed up as
+    "no configurado" in the TUI even though deploys worked fine, because
+    boto3 was finding those files on its own, just later and separately).
+
+    Note there's no hardcoded region fallback here (unlike before): an
+    empty ``region`` is left empty so boto3 keeps resolving it itself
+    (profile → env var → its own default) instead of Wisp silently forcing
+    a region the person never asked for.
     """
     toml_config = load_toml_config()
     aws_toml = toml_config.get("aws", {})
+    profile = aws_toml.get("profile", "")
+
+    cli_config = _read_aws_cli_files(profile)
 
     return AWSCredentials(
-        region=aws_toml.get("region", AWS_DEFAULT_REGION),
-        profile=aws_toml.get("profile", ""),
-        access_key_id=aws_toml.get("access_key_id", ""),
-        secret_access_key=aws_toml.get("secret_access_key", ""),
-        session_token=aws_toml.get("session_token", ""),
+        region=aws_toml.get("region", cli_config.get("region", "")),
+        profile=profile,
+        access_key_id=aws_toml.get(
+            "access_key_id", cli_config.get("access_key_id", "")
+        ),
+        secret_access_key=aws_toml.get(
+            "secret_access_key", cli_config.get("secret_access_key", "")
+        ),
+        session_token=aws_toml.get(
+            "session_token", cli_config.get("session_token", "")
+        ),
     )
 
 
