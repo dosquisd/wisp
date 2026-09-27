@@ -50,7 +50,7 @@ def _read_toml_file(path: Path) -> dict[str, Any]:
     try:
         with path.open("rb") as f:
             return tomllib.load(f)
-    except OSError, tomllib.TOMLDecodeError:
+    except (OSError, tomllib.TOMLDecodeError):  # fmt: skip
         return {}
 
 
@@ -260,28 +260,6 @@ def save_session_config(
 # ─── Per-session configuration ───────────────────────────────────
 
 
-def load_wisp_config() -> WispConfig:
-    """Build a :class:`WispConfig` from the ``[general]`` TOML section.
-
-    Any field omitted in the TOML falls back to the constant defaults from
-    :mod:`wisp.config.constants`.
-
-    Returns:
-        WispConfig: Per-session settings populated from ``wisp.toml``.
-    """
-    general = load_toml_config().get("general", {})
-    return WispConfig(
-        vm_boot_timeout=general.get("vm_boot_timeout", DEFAULT_VM_BOOT_TIMEOUT_SECONDS),
-        wireguard_interface=general.get("wireguard_interface", WIREGUARD_INTERFACE),
-        wireguard_ipv4=general.get("wireguard_ipv4", WIREGUARD_IPV4),
-        wireguard_ipv6=general.get("wireguard_ipv6", WIREGUARD_IPV6),
-        wireguard_dns1=general.get("wireguard_dns1", WIREGUARD_DNS1),
-        wireguard_dns2=general.get("wireguard_dns2", WIREGUARD_DNS2),
-        wireguard_port=int(general.get("wireguard_port", 0)),
-        force_current_ip=bool(general.get("force_current_ip", False)),
-    )
-
-
 @dataclass
 class WispConfig:
     """Per-session deployment settings.
@@ -311,3 +289,25 @@ class WispConfig:
     wireguard_dns2: str = WIREGUARD_DNS2
     wireguard_port: int = 0  # 0 indicates dynamic random port (49152-65535)
     force_current_ip: bool = False
+
+
+def load_wisp_config() -> WispConfig:
+    """Build a :class:`WispConfig` from the ``[general]`` TOML section.
+
+    Any field omitted in the TOML falls back to the constant defaults from
+    :mod:`wisp.config.constants`.
+
+    Returns:
+        WispConfig: Per-session settings populated from ``wisp.toml``.
+    """
+    general = load_toml_config().get("general", {})
+    return WispConfig(
+        vm_boot_timeout=general.get("vm_boot_timeout", DEFAULT_VM_BOOT_TIMEOUT_SECONDS),
+        wireguard_interface=general.get("wireguard_interface", WIREGUARD_INTERFACE),
+        wireguard_ipv4=general.get("wireguard_ipv4", WIREGUARD_IPV4),
+        wireguard_ipv6=general.get("wireguard_ipv6", WIREGUARD_IPV6),
+        wireguard_dns1=general.get("wireguard_dns1", WIREGUARD_DNS1),
+        wireguard_dns2=general.get("wireguard_dns2", WIREGUARD_DNS2),
+        wireguard_port=int(general.get("wireguard_port", 0)),
+        force_current_ip=bool(general.get("force_current_ip", False)),
+    )
