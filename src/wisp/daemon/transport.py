@@ -4,12 +4,12 @@ from abc import ABC, abstractmethod
 from typing import Protocol, runtime_checkable
 
 try:
-    import pywintypes
-    import win32con
-    import win32file
-    import win32pipe
-    import win32security
-except ImportError, ModuleNotFoundError:
+    import pywintypes  # pyright: ignore[reportMissingModuleSource]
+    import win32con  # pyright: ignore[reportMissingModuleSource]
+    import win32file  # pyright: ignore[reportMissingModuleSource]
+    import win32pipe  # pyright: ignore[reportMissingModuleSource]
+    import win32security  # pyright: ignore[reportMissingModuleSource]
+except (ImportError, ModuleNotFoundError):  # fmt: skip
     # These dependencies are not available on non-Windows platforms
     pass
 
@@ -378,8 +378,6 @@ def get_transport() -> BaseTransport:
         case PlatformEnum.LINUX | PlatformEnum.MACOS:
             return UnixSocketTransport()
         case PlatformEnum.WINDOWS:
-            # These dependencies are not available on non-Windows platforms, so we import them here.
-
             return WindowsNamedPipeTransport()
         case _:
             raise NotImplementedError(f"Unsupported platform: {platform_enum}")

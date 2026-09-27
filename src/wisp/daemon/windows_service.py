@@ -1,8 +1,8 @@
 import asyncio
 
-import servicemanager
-import win32service
-import win32serviceutil
+import servicemanager  # pyright: ignore[reportMissingModuleSource]
+import win32service  # pyright: ignore[reportMissingModuleSource]
+import win32serviceutil  # pyright: ignore[reportMissingModuleSource]
 
 from wisp.daemon.server import main
 from wisp.daemon.transport import WindowsNamedPipeTransport
