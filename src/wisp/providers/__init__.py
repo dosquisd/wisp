@@ -7,11 +7,13 @@ Maps each :class:`ProviderEnum` value to its concrete
 
 from wisp.providers.aws import AWSProvider
 from wisp.providers.base import BaseProvider, ProviderEnum
+from wisp.providers.gcp import GCPProvider
 from wisp.providers.oci import OCIProvider
 
 __all__ = [
     "PROVIDERS_MAP",
     "AWSProvider",
+    "GCPProvider",
     "OCIProvider",
     "BaseProvider",
     "ProviderEnum",
@@ -21,4 +23,5 @@ __all__ = [
 PROVIDERS_MAP: dict[ProviderEnum, type[BaseProvider]] = {
     ProviderEnum.AWS: AWSProvider,
     ProviderEnum.OCI: OCIProvider,
+    ProviderEnum.GCP: GCPProvider,
 }

@@ -15,6 +15,7 @@ from typing import TypedDict
 from wisp.cli.app import WispApp
 from wisp.config.credentials import (
     resolve_aws_credentials,
+    resolve_gcp_credentials,
     resolve_oci_credentials,
 )
 from wisp.config.settings import get_default_provider
@@ -122,6 +123,9 @@ def _create_provider_with_credentials(provider_option: ProviderEnum):
         return PROVIDERS_MAP[provider_option](credentials=creds)
     elif provider_option == ProviderEnum.OCI:
         creds = resolve_oci_credentials()
+        return PROVIDERS_MAP[provider_option](credentials=creds)
+    elif provider_option == ProviderEnum.GCP:
+        creds = resolve_gcp_credentials()
         return PROVIDERS_MAP[provider_option](credentials=creds)
     else:
         return PROVIDERS_MAP[provider_option]()

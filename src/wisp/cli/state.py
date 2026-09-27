@@ -4,8 +4,10 @@ from dataclasses import dataclass, field
 
 from wisp.config.credentials import (
     AWSCredentials,
+    GCPCredentials,
     OCICredentials,
     resolve_aws_credentials,
+    resolve_gcp_credentials,
     resolve_oci_credentials,
 )
 from wisp.config.settings import (
@@ -36,6 +38,7 @@ class AppState:
             deployment, if any.
         aws_credentials (AWSCredentials): Resolved AWS credentials.
         oci_credentials (OCICredentials): Resolved OCI credentials.
+        gcp_credentials (GCPCredentials): Resolved GCP credentials.
     """
 
     config: WispConfig = field(default_factory=load_wisp_config)
@@ -44,6 +47,7 @@ class AppState:
     last_deployment: DeployVMResult | None = None
     aws_credentials: AWSCredentials = field(default_factory=resolve_aws_credentials)
     oci_credentials: OCICredentials = field(default_factory=resolve_oci_credentials)
+    gcp_credentials: GCPCredentials = field(default_factory=resolve_gcp_credentials)
 
     def reset_config(self) -> None:
         """Reset :attr:`config` to a fresh :class:`WispConfig` from TOML."""
@@ -55,6 +59,8 @@ class AppState:
             return self.aws_credentials
         elif provider_name == "oci":
             return self.oci_credentials
+        elif provider_name == "gcp":
+            return self.gcp_credentials
         return None
 
     def refresh_credentials(self) -> None:
@@ -62,3 +68,4 @@ class AppState:
         reload_toml_config()
         self.aws_credentials = resolve_aws_credentials()
         self.oci_credentials = resolve_oci_credentials()
+        self.gcp_credentials = resolve_gcp_credentials()

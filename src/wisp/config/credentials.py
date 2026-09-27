@@ -14,6 +14,7 @@ from pathlib import Path
 
 from wisp.config.constants import OCI_DEFAULT_COMPARTMENT_ID
 from wisp.config.settings import load_toml_config
+from wisp.utils.logger import logger
 
 
 class BaseCredentials(ABC):
@@ -127,7 +128,7 @@ class OCICredentials(BaseCredentials):
         return config
 
 
-# ─── Resolution Functions ────────────────────────────────────────tions ────────────────────────────────────────
+# ─── Resolution Functions ────────────────────────────────────────
 
 
 def _read_aws_cli_files(profile: str) -> dict[str, str]:
@@ -254,6 +255,100 @@ def resolve_oci_credentials() -> OCICredentials:
     )
 
 
+# ─── GCP Credentials ─────────────────────────────────────────────
+
+
+@dataclass
+class GCPCredentials(BaseCredentials):
+    """Google Cloud credentials.
+
+    ``project_id`` is the only truly required value for a deploy; everything
+    else is optional. When ``credentials_path`` is set (service account key
+    JSON, downloadable from the GCP Console), the SDK uses it directly — no
+    gcloud CLI needed. Otherwise, Application Default Credentials (ADC) are
+    used — ``GOOGLE_APPLICATION_CREDENTIALS`` env var,
+    ``gcloud auth application-default login``, or the GCE metadata server.
+    """
+
+    project_id: str = ""
+    region: str = ""
+    zone: str = ""
+    credentials_path: str = ""
+
+    def is_explicitly_configured(self) -> bool:
+        """True if any field is explicitly set (not relying on ADC)."""
+        return any([self.project_id, self.region, self.zone, self.credentials_path])
+
+    def get_zone(self) -> str:
+        """Return the zone, deriving ``{region}-a`` when only a region is set.
+
+        GCP zones are region-scoped (e.g. ``us-central1-a``); if only the
+        region is configured, the first zone of the region is assumed.
+        """
+        if self.zone:
+            return self.zone
+        if self.region:
+            return f"{self.region}-a"
+        return ""
+
+    def to_gcp_config(self) -> dict[str, str]:
+        """Convert to ``pulumi_gcp.Provider`` config values (excludes empties)."""
+        config = {}
+        if self.project_id:
+            config["project"] = self.project_id
+        if self.region:
+            config["region"] = self.region
+        if self.zone:
+            config["zone"] = self.zone
+        return config
+
+
+def resolve_gcp_credentials() -> GCPCredentials:
+    """Resolve GCP credentials from TOML config + google.auth defaults.
+
+    Values set in ``wisp.toml`` (``[gcp]``) take priority; anything not set
+    there falls back to the environment (``GOOGLE_CLOUD_PROJECT`` /
+    ``GCLOUD_PROJECT``) and :func:`google.auth.default` — which resolves the
+    project and the Application Default Credentials (ADC) in one call.
+    """
+    toml_config = load_toml_config()
+    gcp_toml = toml_config.get("gcp", {})
+
+    project_id = gcp_toml.get("project_id", "")
+    if not project_id:
+        # Best-effort fallback: env vars first (work even without ADC), then
+        # google.auth.default() (resolves project alongside the credentials;
+        # if ADC is not set up it raises and the project simply stays empty).
+        import os
+
+        project_id = (
+            os.environ.get("GOOGLE_CLOUD_PROJECT")
+            or os.environ.get("GCLOUD_PROJECT")
+            or ""
+        )
+        if not project_id:
+            try:
+                import google.auth
+
+                _, detected_project = google.auth.default()
+                if detected_project:
+                    project_id = detected_project
+            except Exception:
+                pass
+
+    region = gcp_toml.get("region", "")
+    zone = gcp_toml.get("zone", "")
+    if not zone and region:
+        zone = f"{region}-a"
+
+    return GCPCredentials(
+        project_id=project_id,
+        region=region,
+        zone=zone,
+        credentials_path=gcp_toml.get("credentials_path", ""),
+    )
+
+
 # ─── Validation Functions ────────────────────────────────────────
 
 
@@ -289,3 +384,72 @@ def validate_oci_credentials(creds: OCICredentials) -> bool:
         return True
     except Exception:
         return False
+
+
+def validate_gcp_credentials(creds: GCPCredentials) -> bool:
+    """Validate GCP credentials by listing the project's regions.
+
+    Returns True if credentials work, False otherwise. Uses the Compute SDK
+    with explicitly loaded credentials — the service account file when
+    ``credentials_path`` is set, otherwise :func:`google.auth.default` (ADC).
+    """
+    try:
+        from google.cloud import compute_v1
+
+        client = compute_v1.RegionsClient(credentials=_load_google_credentials(creds))
+        request = compute_v1.ListRegionsRequest(project=creds.project_id)
+        list(client.list(request=request))
+        return True
+    except Exception:
+        return False
+
+
+def _load_google_credentials(creds: GCPCredentials):
+    """Load explicit google.auth credentials from a GCPCredentials instance.
+
+    Resolution order:
+    1. Service account key file (``credentials_path``) — downloadable from
+       the GCP Console; works without the gcloud CLI. Loaded with the
+       ``cloud-platform`` scope (service-account JWTs without scopes are
+       rejected with ``invalid_scope``).
+    2. :func:`google.auth.default` (ADC) — ``GOOGLE_APPLICATION_CREDENTIALS``
+       env var, ``gcloud auth application-default login``, or the GCE
+       metadata server.
+    """
+    if creds.credentials_path:
+        from google.auth.transport.requests import Request as AuthRequest
+        from google.oauth2 import service_account
+
+        try:
+            import json
+
+            with open(creds.credentials_path) as f:
+                key_type = json.load(f).get("type", "")
+        except OSError, ValueError, json.JSONDecodeError:
+            key_type = ""
+
+        if key_type != "service_account":
+            logger.warning(
+                f"'{creds.credentials_path}' is a '{key_type or 'unknown'}' "
+                "credential, not a service account key. User-account "
+                "credentials may not be resolvable by the GCP APIs ('Gaia id "
+                "not found'). Use a service account key JSON instead "
+                "(Console → IAM & Admin → Service Accounts → Keys → Add Key)."
+            )
+
+        # Explicit scopes are required: a service-account JWT without scopes
+        # is rejected by Google's token endpoint with `invalid_scope`.
+        resolved = service_account.Credentials.from_service_account_file(
+            creds.credentials_path,
+            scopes=["https://www.googleapis.com/auth/cloud-platform"],
+        )
+        # Refresh eagerly so auth problems surface with their real cause
+        # (e.g. "Invalid JWT Signature" for a revoked/rotated key) instead of
+        # a misleading 401 from the first API request.
+        resolved.refresh(AuthRequest())
+        return resolved
+
+    import google.auth
+
+    resolved, _ = google.auth.default()
+    return resolved
