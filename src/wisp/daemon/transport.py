@@ -206,9 +206,7 @@ class WindowsNamedPipeTransport(BaseTransport):
         self._stopping = False
 
     @classmethod
-    def _create_security_attributes(
-        cls,
-    ) -> win32security.SECURITY_ATTRIBUTES:
+    def _create_security_attributes(cls):  # -> win32security.SECURITY_ATTRIBUTES
         """Build the security descriptor for the Wisp Named Pipe."""
 
         dacl = win32security.ACL()
