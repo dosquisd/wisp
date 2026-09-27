@@ -32,6 +32,25 @@ function ensureCurl() {
     esac
 }
 
+function configurePulumiPath() {
+    local pulumi_user="${SUDO_USER:-root}"
+    local pulumi_home
+
+    pulumi_home=$(getent passwd "${pulumi_user}" | cut -d: -f6)
+
+    runuser -u "${pulumi_user}" -- env HOME="${pulumi_home}" sh -s <<'EOF'
+set -eu
+
+pulumi_path='export PATH="$HOME/.pulumi/bin:$PATH"'
+for profile in "$HOME/.profile" "$HOME/.bashrc"; do
+    touch "$profile"
+    if ! grep -Fqx "$pulumi_path" "$profile"; then
+        printf '\n%s\n' "$pulumi_path" >> "$profile"
+    fi
+done
+EOF
+}
+
 function installPulumi() {
     local pulumi_user="${SUDO_USER:-root}"
     local pulumi_home
@@ -42,6 +61,7 @@ function installPulumi() {
         || runuser -u "${pulumi_user}" -- sh -lc 'command -v pulumi' &>/dev/null \
         || [[ -x "${pulumi_home}/.pulumi/bin/pulumi" ]] \
         || [[ -x "${PULUMI_INSTALL_DIR}/bin/pulumi" ]]; then
+        configurePulumiPath
         echo -e "${GREEN}Pulumi is already installed. Skipping.${NC}"
         return
     fi
@@ -54,8 +74,9 @@ function installPulumi() {
     echo -e "${GREEN}Installing Pulumi for ${pulumi_user}...${NC}"
     curl -fsSL https://get.pulumi.com | runuser -u "${pulumi_user}" -- \
         env HOME="${pulumi_home}" sh -s -- \
-        --install-root "${pulumi_home}/.pulumi" --no-edit-path
+        --install-root "${pulumi_home}/.pulumi"
 
+    configurePulumiPath
     echo -e "${GREEN}Pulumi installed in ${pulumi_home}/.pulumi${NC}"
 }
 
