@@ -1,0 +1,252 @@
+# AGENTS.md
+
+Concise-but-complete context for AI coding sessions (opencode, Claude, etc.)
+working on this repository. This exists so you don't have to re-learn the
+project from zero every session. Everything here was verified against the
+actual codebase — do not contradict it without checking the code first.
+
+## What is Wisp
+
+Wisp provisions **ephemeral WireGuard VPNs on your own cloud**: it spins up a
+throwaway VM at a cloud provider, installs and configures a WireGuard server
+on it over SSH, connects your local machine as a WireGuard client through a
+privileged local daemon, and tears everything down on demand. Driven through
+an interactive Textual TUI or non-interactive CLI subcommands.
+
+Three cooperating pieces:
+
+1. **Frontend** — Textual TUI or argparse CLI (unprivileged, runs as your user)
+2. **Cloud provider layer** — Pulumi Automation API for provisioning +
+   Paramiko SSH/SFTP for remote server configuration
+3. **Privileged local daemon** — systemd socket-activated service (Linux) or
+   native Windows Service + Named Pipes (Windows)
+
+Supported providers (as of this writing): **AWS**, **OCI**, and **GCP**.
+The provider layer is extensible — new providers implement `BaseProvider`
+(or extend `PulumiProvider`) and register in `PROVIDERS_MAP`. For the current
+list, see `ProviderEnum`
+([`src/wisp/providers/base.py`](src/wisp/providers/base.py)) and
+`PROVIDERS_MAP`
+([`src/wisp/providers/__init__.py`](src/wisp/providers/__init__.py)).
+
+## Package layout
+
+```text
+src/wisp/
+├── main.py                 # Entry point; argparse CLI + TUI dispatch; wisp console script
+├── schemas.py              # Shared TypedDicts (InventoryContext: SSH/WireGuard deploy context)
+├── cli/                    # Textual TUI
+│   ├── app.py              # WispApp (styles, screen registration)
+│   ├── state.py            # AppState (in-memory session state, TOML-derived defaults)
+│   ├── __main__.py         # python -m wisp.cli launcher
+│   └── screens/            # MainMenu, Config, Deploy, Progress screens
+├── config/
+│   ├── settings.py         # TOML loading (user+project merged), WispConfig, per-provider defaults
+│   ├── credentials.py      # Per-provider credential resolution (AWS/OCI/GCP) + validation
+│   └── constants.py        # Paths, tags, Pulumi identity, WireGuard defaults
+├── providers/
+│   ├── base.py             # BaseProvider ABC + ProviderEnum + DeployVMResult
+│   ├── pulumi_base.py      # PulumiProvider: shared deploy/destroy flow for all Pulumi providers
+│   ├── aws/                # AWS implementation (provider, pulumi program, constants)
+│   ├── oci/                # OCI implementation (provider, pulumi program, constants)
+│   └── gcp/                # GCP implementation (provider, pulumi program, constants)
+├── wireguard/
+│   ├── remote_server.py    # Remote WireGuard server config via Paramiko (SSH/SFTP)
+│   └── local_client.py     # Thin client over the daemon transport
+├── daemon/
+│   ├── server.py           # asyncio server (runs as root/SYSTEM)
+│   ├── transport.py        # Unix socket (Linux) + Named Pipe (Windows) transports
+│   ├── adapter.py          # Platform-specific privileged ops (Linux/Windows implemented; macOS NOT)
+│   ├── protocol.py         # Request/Response wire format (newline-delimited JSON)
+│   └── windows_service.py  # Windows Service wrapper (pywin32)
+└── utils/                  # logger, platform detection, RNG, public IP, Pulumi helpers
+```
+
+Supporting non-Python assets at the repo root:
+
+```text
+scripts/    wireguard-server-install.sh  # Non-interactive WireGuard installer (angristan, MIT)
+            wireguard-client-install.sh  # Client installer
+            utils.sh                     # Shared shell helpers (installWireGuardClient, etc.)
+setup.sh                                 # Linux/macOS installer: daemon (systemd), WireGuard tools, Pulumi
+setup.ps1                                # Windows installer: native service, WireGuard exe, Pulumi via winget
+packaging/  wisp.socket, wisp.service    # systemd units (Linux only)
+wisp.toml.example                        # Config template (wisp.toml itself is gitignored)
+```
+
+## Conventions (non-negotiable)
+
+- **ALL documentation, docstrings, CLI help strings, and code comments are
+  written in English.** The ONLY exception: the TUI's user-facing strings
+  (`src/wisp/cli/`) are in Spanish **by design** (a separate author owns
+  them and will translate them later) — do not translate them unless the
+  user explicitly asks.
+- **Docstrings follow PEP 257** with Google-style `Args:` / `Returns:` /
+  `Raises:` sections. **Code follows PEP 8** as enforced by Ruff.
+- **Ruff config** (`pyproject.toml`): line length 88, 4-space indent, double
+  quotes, lint rules `E4, E7, E9, F` + import sorting (`I`), target Python 3.14.
+- **Conventional Commits**: `feat:`, `fix:`, `refactor:`, `style:`,
+  `chore:`, `docs:`. Pull requests against `main`.
+- **The user reviews ALL changes BEFORE commits.** Never commit without
+  explicit approval. Never push (`git push` is denied by permission rules).
+- No emojis in code or docs.
+- **Provider list is extensible**: wherever docs enumerate providers, say
+  "as of this writing" and point to `ProviderEnum`/`PROVIDERS_MAP` with
+  concrete file links — never hard-fix the current list as the only truth.
+- **Platform differences are explicit**: wherever behavior differs
+  (daemon transport, file permissions, setup scripts), document Linux vs
+  Windows separately.
+
+## Key architecture facts (verified against the codebase — do not contradict)
+
+- **SSH keys: RSA 4096** via `pulumi-tls` (`algorithm="RSA", rsa_bits=4096`)
+  in ALL providers — **NOT ED25519**. Paramiko loads them supporting
+  Ed25519/ECDSA/RSA key formats.
+- **Remote server configuration is Paramiko SSH/SFTP** (no Ansible, no
+  Jinja2): `wireguard/remote_server.py` uploads
+  `scripts/wireguard-server-install.sh` (a 687-line angristan installer —
+  **NOT optional**, it configures the remote server) to `/tmp/` and executes
+  it with `sudo` via env vars (`SERVER_PUB_IP`, `SERVER_PORT`, `ALLOWED_IPS`,
+  `AUTO_INSTALL=y`, etc.).
+- **Region is per-provider**: `[aws].region`, `[oci].region`,
+  `[gcp].region` in `wisp.toml` — there is **no cross-provider default
+  region**. The CLI resolves the region from `provider.credentials.region`
+  when `-r/--region` is omitted.
+- **`WispConfig`** (per-session deployment settings) is built from the
+  `[general]` TOML section via `load_wisp_config()` — never persisted back.
+- **Daemon transport**: Unix socket `/run/wisp.sock` (Linux, systemd socket
+  activation via fd 3) or Named Pipe `\\.\pipe\wisp` (Windows). Selected by
+  `daemon.transport.get_transport()`.
+- **File permissions**: `secure_file()` → `0600` (Linux/macOS) or `icacls`
+  with well-known SIDs `*S-1-5-18:F` / `*S-1-5-32-544:F` (Windows — SIDs
+  because account names are localized on non-English Windows).
+- **TOML credentials**: AWS and OCI credentials are **NOT configured in
+  `wisp.toml`** — Pulumi deploys use each provider's own credential chain
+  (see provider sections below). GCP is fully TOML-configurable.
+- **Pulumi stack names are provider-specific**: `get_pulumi_stack_name(provider)`
+  → `wisp-stack-aws`, `wisp-stack-oci`, `wisp-stack-gcp` (project
+  `wisp-project`).
+- **Deploy flow** (shared in `PulumiProvider.deploy_vm`): resolve config →
+  `pulumi up` with the provider program → wait `vm_boot_timeout` (default
+  60s) → persist RSA key to `keys/wireguard-key.pem` → configure remote
+  server (Paramiko SSH/SFTP) → connect local client (daemon).
+- **Destroy flow**: disconnect client → `stack.destroy()` → remove local
+  artifacts (key + client conf).
+
+## Provider-specific notes
+
+### AWS
+
+- Credentials are NOT in `wisp.toml`: Pulumi and boto3 use the standard AWS
+  CLI/SDK chain (env vars, `~/.aws/credentials`, `~/.aws/config`, IAM roles).
+  Only `[aws].region` is configurable in the TOML.
+- `resolve_aws_credentials()` reads the TOML first, then peeks at
+  `~/.aws/{credentials,config}` (network-free, via
+  `_read_aws_cli_files()`) — no hardcoded region fallback.
+- Regions: `boto3` `ec2.describe_regions()`.
+- Resources: security group (UDP wg port + TCP 22) + `t3.micro` EC2 instance,
+  most-recent Ubuntu AMI (owner Canonical), RSA 4096 key pair.
+- Deployment config follows the [Pulumi AWS installation & configuration
+  docs](https://www.pulumi.com/registry/packages/aws/installation-configuration/).
+
+### OCI
+
+- Credentials are NOT in `wisp.toml`: Pulumi and the OCI SDK use the standard
+  OCI config chain (`~/.oci/config` profile-based, env vars). Configurable in
+  the TOML: `[oci].region`, `[oci].profile` (used for credential
+  resolution/validation), and `[oci].compartment_ocid` (which IS passed to
+  the Pulumi deploy via `OCIProvider._get_compartment_id()`).
+- Regions: OCI Identity API (`list_region_subscriptions`).
+- Resources: VCN + Internet Gateway + Route Table + Security List + Subnet +
+  Flex Compute Instance (`VM.Standard.A1.Flex`, 2 OCPU, 8 GB, Ubuntu 24.04),
+  RSA 4096 key pair.
+- Deployment config follows the [Pulumi OCI installation & configuration
+  docs](https://www.pulumi.com/registry/packages/oci/installation-configuration/).
+
+### GCP (fully TOML-configurable — was the most problematic provider)
+
+- **Everything in `[gcp]` reaches the deploy**: `project_id`, `region`, and
+  `zone` go to the explicit `gcp.Provider` resource;
+  `credentials_path` authenticates the deploy as the service account
+  (bypassing gcloud/ADC).
+- **Credentials**: `credentials_path` points to a service account key JSON
+  (Console → IAM & Admin → Service Accounts → Keys → Add Key → JSON) — the
+  no-CLI path. Without it, Application Default Credentials (ADC) are used.
+- **`gcloud auth application-default login` creates the ADC file** at
+  `~/.config/gcloud/application_default_credentials.json` — an
+  **authorized_user** JSON of the user's account (NOT a service account).
+- **Project fallback**: TOML → `GOOGLE_CLOUD_PROJECT` / `GCLOUD_PROJECT` env
+  vars → `google.auth.default()` (which returns `(credentials, project)`).
+- **Zone derivation**: `get_zone()` returns the explicit zone or derives
+  `f"{region}-a"`.
+- **Regions**: Compute SDK (`compute_v1.RegionsClient.list` via
+  `google-cloud-compute`).
+
+#### GCP gotchas (learned the hard way — all verified)
+
+- `gcp.compute.Firewall` accepts `network`/`project` — **NO `region`**
+  (firewall rules are project-level/global).
+- **SPOT requires `preemptible=True`**: Pulumi defaults `preemptible` to
+  `False` when unset, and GCP rejects `preemptible=false` + `SPOT`
+  (Error 400: "contradicting").
+- **GCP SSH metadata key is `ssh-keys`** (hyphenated) with the **username as
+  a `user:` prefix** (`ubuntu:ssh-rsa AAAA...`). `ssh_authorized_keys` is
+  the OCI convention and is **IGNORED by GCP** (breaks SSH auth with
+  "Permission denied (publickey)"). Verified in the
+  [GCP "Add SSH keys to VMs" docs](https://cloud.google.com/compute/docs/connect/add-ssh-keys).
+- **NEVER f-string a `pulumi.Output`** — use `pulumi.Output.concat` or
+  `.apply()`. An f-string evaluates before the engine resolves the Output
+  and lands the literal "Calling `__str__` on an Output[T] is not supported."
+  text in the resource (e.g. the SSH key metadata). Verify deployed
+  resources via the SDK when in doubt.
+- **`pulumi_gcp` Provider constructor accepts `credentials=<path>`** to the
+  SA key JSON — that is how the deploy authenticates without the CLI.
+- **Service account keys load with explicit scopes** (`cloud-platform`) —
+  a SA JWT without scopes is rejected with `invalid_scope`. Wisp also
+  refreshes eagerly so the real cause surfaces (e.g. "Invalid JWT
+  Signature" for a revoked/rotated key) instead of a misleading 401.
+- **GCP user accounts (Workspace) can be unresolvable** by the Compute APIs
+  ("Not found; Gaia id not found for email ...") — use a service account
+  key instead of user-account credentials.
+- Pulumi's GCP provider also reads `GOOGLE_CREDENTIALS` /
+  `GOOGLE_APPLICATION_CREDENTIALS` env vars and gcloud as its own chain —
+  see the [Pulumi GCP installation & configuration
+  docs](https://www.pulumi.com/registry/packages/gcp/installation-configuration/).
+
+## Docs map
+
+- [`docs/README.md`](docs/README.md) — documentation index
+- [`docs/architecture.md`](docs/architecture.md) — high-level design, module map, data flow
+- [`docs/installation.md`](docs/installation.md) — requirements, setup.sh / setup.ps1, daemon, dependencies
+- [`docs/usage.md`](docs/usage.md) — CLI subcommands and the TUI
+- [`docs/configuration.md`](docs/configuration.md) — wisp.toml, WispConfig, constants, provider config
+- [`docs/deployment-flow.md`](docs/deployment-flow.md) — step-by-step deploy/destroy
+- [`docs/security.md`](docs/security.md) — keys, firewall, socket permissions, trust boundaries
+- [`docs/contributing.md`](docs/contributing.md) — adding a provider, tooling, style
+- [`docs/components/`](docs/components/README.md) — per-module reference (cli, daemon, entry-point, providers, utils, wireguard)
+
+## Tooling commands
+
+```bash
+uv sync                                  # install deps (incl. dev group)
+uv run ruff check .                      # lint
+uv run ruff format .                     # format
+uv tool install --editable . --force     # install/refresh the `wisp` CLI
+                                         # (REQUIRED after dependency changes —
+                                         # the tool has its own venv)
+```
+
+Useful verification snippets:
+
+```bash
+wisp regions aws        # boto3 regions
+wisp regions oci        # OCI Identity API regions
+wisp regions gcp        # Compute SDK regions
+python -m wisp.cli      # TUI directly
+```
+
+When debugging provider auth issues, prefer verifying against the real
+resource via the SDK (e.g. `compute_v1.InstancesClient` metadata) rather
+than trusting error messages alone — several misleading errors (401 hiding
+an invalid JWT signature, `Authentication failed` hiding missing metadata)
+were diagnosed exactly that way.
