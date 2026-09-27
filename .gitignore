@@ -17,3 +17,10 @@ keys/*.pem
 wireguard-confs/*.conf
 
 logs/*
+
+# Ignore all hidden files
+.*
+
+# Except some cases
+!.gitignore
+!.gitkeep
