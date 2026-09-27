@@ -9,7 +9,7 @@ everything down again on demand.
 Wisp can be driven either through an interactive terminal UI (TUI) or through
 non-interactive CLI subcommands.
 
-> **Note:** As of this writing, Wisp ships with support for `aws` and `oci`.
+> **Note:** As of this writing, Wisp ships with support for `aws`, `oci`, and `gcp`.
 > The provider layer is designed to be extensible — new providers can be added
 > by implementing `BaseProvider` (or extending `PulumiProvider`) and
 > registering them in `PROVIDERS_MAP`
@@ -36,7 +36,7 @@ non-interactive CLI subcommands.
         ┌─────────────┐  Pulumi Automation API   ┌──────────────────┐
         │  Wisp CLI/  │ ───────────────────────► │  Cloud VM        │
         │  TUI (user) │                          │  (AWS EC2 / OCI  │
-        └──────┬──────┘                          │  Compute)        │
+        └──────┬──────┘                          │  / GCP Compute)  │
                │                                 └────────┬─────────┘
                │                                          │
                │  Paramiko (SSH/SFTP) runs the            │

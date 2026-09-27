@@ -80,7 +80,7 @@ the interface up.
 User → TUI/CLI
   → Provider.deploy_vm(region, config)
       → Pulumi Automation: create_or_select_stack(program).up()
-          program = create_ec2_instance / create_oci_instance(...)
+          program = create_ec2_instance / create_oci_instance / create_gcp_instance(...)
             - AMI/image lookup (most recent Ubuntu image)
             - security rules (UDP wg port + TCP 22)
             - tls.PrivateKey (RSA 4096) → SSH key pair
@@ -124,7 +124,7 @@ name (`"aws"`, `"oci"`) to its concrete class. Adding a new provider means
 implementing `BaseProvider` (or extending `PulumiProvider`) and registering it
 in `PROVIDERS_MAP`. See [Contributing](./contributing.md).
 
-> **Note:** As of this writing, Wisp ships with support for `aws` and `oci`.
+> **Note:** As of this writing, Wisp ships with support for `aws`, `oci`, and `gcp`.
 > The provider layer is designed to be extensible — new providers can be added
 > by implementing `BaseProvider` (or extending `PulumiProvider`) and
 > registering them in `PROVIDERS_MAP`

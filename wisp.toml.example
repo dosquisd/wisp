@@ -9,19 +9,24 @@
 #   2. Project-level: <repo root>/wisp.toml
 #
 # Everything is OPTIONAL. The `[general]` section configures WispConfig
-# (WireGuard / VM boot settings); the `[aws]` and `[oci]` sections configure
-# credentials and provider-specific defaults (such as each provider's own
-# default region — there is NO shared cross-provider default region).
+# (WireGuard / VM boot settings); the `[aws]`, `[oci]`, and `[gcp]` sections
+# configure provider-specific defaults (each provider's own default region —
+# there is NO shared cross-provider default region) plus, for OCI, the
+# compartment and, for GCP, the project.
 #
-# When credentials are omitted, wisp falls back to the provider's standard
-# CLI/SDK credential chain:
+# Cloud credentials are NOT configured here. Each provider uses its standard
+# CLI/SDK credential chain for authentication:
 #   - AWS: env vars, ~/.aws/credentials, ~/.aws/config, IAM roles
+#     (`aws configure` / environment variables)
 #   - OCI: ~/.oci/config (profile-based), env vars (OCI_TENANCY, OCI_USER, ...)
+#     (`oci setup config` / environment variables)
+#   - GCP: GOOGLE_CREDENTIALS / GOOGLE_APPLICATION_CREDENTIALS env vars, ADC,
+#     or gcloud (`gcloud auth application-default login`)
 
 
 [general]
 # Default provider used by `wisp` when invoked without a provider argument.
-# Choices: "aws", "oci"
+# Choices: "aws", "oci", "gcp"
 # default_provider = "aws"        # uncomment to override (defaults to "aws")
 
 # Per-session WispConfig defaults (all optional). When omitted, these fall
@@ -37,44 +42,53 @@
 
 
 [aws]
-# All AWS fields are OPTIONAL.
-# If omitted, boto3 uses its default credential chain
-# (env vars / ~/.aws/credentials / ~/.aws/config / IAM roles).
+# AWS credentials are NOT configured here. The Pulumi deploy and boto3 use
+# the standard AWS CLI/SDK credential chain (env vars, ~/.aws/credentials,
+# ~/.aws/config, IAM roles). Configure them via the AWS CLI
+# (`aws configure`) or environment variables instead.
 
 # Default region for AWS deployments (used when no -r/--region is given).
 # region = "us-east-2"
 
-# AWS CLI profile name to use (e.g. "default", "work", "personal").
-# Equivalent to --profile in the AWS CLI.
-# profile = "default"
-
-# Explicit access key. Prefer `profile` over these; credentials in plain text
-# TOML are not recommended for production use.
-# access_key_id = ""
-# secret_access_key = ""
-# session_token = ""
-
 
 [oci]
-# All OCI fields are OPTIONAL.
-# If omitted, the OCI SDK uses its default config chain
-# (~/.oci/config profile, env vars OCI_TENANCY / OCI_USER / OCI_FINGERPRINT /
-# OCI_PRIVATE_KEY_PATH / OCI_REGION).
+# OCI credentials are NOT configured here. The Pulumi deploy and the OCI SDK
+# use the standard OCI config chain (~/.oci/config profile-based, env vars
+# OCI_TENANCY / OCI_USER / OCI_FINGERPRINT / OCI_PRIVATE_KEY_PATH / OCI_REGION).
+# Configure them via `oci setup config` or environment variables instead.
 
-# Profile name in ~/.oci/config to use (e.g. "DEFAULT", "work").
-# When set, wisp reads the matching [profile] section from ~/.oci/config.
+# Profile name in ~/.oci/config to use (e.g. "DEFAULT", "work") — used to
+# resolve credentials for region listing/validation.
 # profile = "DEFAULT"
 
 # Default region for OCI deployments (used when no -r/--region is given).
 # e.g. "sa-bogota-1", "us-ashburn-1".
 # region = ""
 
-# Alternatively, provide credentials directly (must set ALL of these):
-# tenancy_ocid = ""
-# user_ocid = ""
-# fingerprint = ""
-# private_key_path = ""          # path to the API signing key (PEM)
-
-# Compartment OCID to deploy into. If empty, defaults to the tenancy OCID
-# (root compartment).
+# Compartment OCID to deploy into (passed to the Pulumi deploy). If empty,
+# defaults to the tenancy OCID (root compartment).
 # compartment_ocid = ""
+
+
+[gcp]
+# All GCP fields are OPTIONAL except `project_id` (which can also be resolved
+# from GOOGLE_CLOUD_PROJECT env var or gcloud defaults). Everything configured
+# here is passed to the Pulumi deploy: the project, region, and zone go to the
+# `gcp.Provider` resource, and `credentials_path` authenticates the deploy as
+# the service account (bypassing the gcloud/ADC chain — see the Pulumi GCP
+# docs, `credentials` accepts a path to the SA key JSON).
+
+# GCP project ID to deploy into (e.g. "my-project-123456").
+# project_id = ""
+
+# Path to a service account key file (JSON) — authenticates the Pulumi deploy
+# without the gcloud CLI (Console → IAM & Admin → Service Accounts → Keys).
+# credentials_path = ""
+
+# Default region for GCP deployments (used when no -r/--region is given).
+# e.g. "us-central1", "europe-west1".
+# region = ""
+
+# Default zone for GCP deployments. If empty, derived as "{region}-a".
+# e.g. "us-central1-a", "us-central1-f".
+# zone = ""

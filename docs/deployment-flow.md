@@ -15,8 +15,8 @@ Entry: `Provider.deploy_vm(region, force_current_ip=False, config=None, on_progr
    from the provided config.
 
 2. **Provision with Pulumi.** `create_or_select_pulumi_stack(program, provider=...)`
-   selects (or creates) the provider-specific stack (`wisp-stack-aws` or
-   `wisp-stack-oci`) in project `wisp-project`, then `stack.up()` runs the
+   selects (or creates) the provider-specific stack (`wisp-stack-aws`,
+   `wisp-stack-oci`, or `wisp-stack-gcp`) in project `wisp-project`, then `stack.up()` runs the
    provider-specific program:
    - `ensure_plugins()` installs the provider plugins (`aws` `v7.44.0`,
      `oci` `v4.22.0`, `tls` `v5.5.1`) once per process.

@@ -8,7 +8,7 @@ as a WireGuard client, and tears everything down again on demand. Drive it
 through an interactive terminal UI (TUI) or non-interactive CLI subcommands.
 
 ```text
-   Wisp CLI/TUI ──Pulumi──▶ Cloud VM (AWS EC2 / OCI Compute + WireGuard)
+   Wisp CLI/TUI ──Pulumi──▶ Cloud VM (AWS EC2 / OCI Compute / GCP + WireGuard)
         │  ▲                        │
         │  └──── Paramiko (SSH) ────┘   installs & configures the server
         ▼
@@ -31,11 +31,12 @@ group-restricted Unix socket (Linux/macOS) or Named Pipe (Windows) instead.
   (Linux/macOS) or the WireGuard Windows installer via `setup.ps1` (Windows).
 - Pulumi CLI — installed by `setup.sh` (Linux/macOS) or `setup.ps1` (Windows)
   unless `--skip-pulumi` is passed.
-- Cloud credentials (AWS or OCI) available in the environment (for example via
-  the AWS CLI, `~/.aws/credentials`, or `~/.oci/config`), or configured in
-  `wisp.toml`.
+- Cloud credentials available in the environment (for example via the AWS CLI,
+  `~/.aws/credentials`, or `~/.oci/config`). To configure providers via
+  `wisp.toml` (and see what each provider supports), see
+  [docs/configuration.md](docs/configuration.md).
 
-> **Note:** As of this writing, Wisp ships with support for `aws` and `oci`.
+> **Note:** As of this writing, Wisp ships with support for `aws`, `oci`, and `gcp`.
 > The provider layer is designed to be extensible — new providers can be added
 > by implementing `BaseProvider` (or extending `PulumiProvider`) and
 > registering them in `PROVIDERS_MAP`

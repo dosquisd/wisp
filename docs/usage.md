@@ -15,9 +15,9 @@ wisp regions    # CLI: list available regions
 ## CLI subcommands
 
 Every subcommand accepts a positional `provider` argument (default `aws`;
-`aws` and `oci` today — see `ProviderEnum` for the current list).
+`aws`, `oci`, and `gcp` today — see `ProviderEnum` for the current list).
 
-> **Note:** Wisp ships with support for `aws` and `oci` as of this writing, and
+> **Note:** Wisp ships with support for `aws`, `oci`, and `gcp` as of this writing, and
 > the provider layer is extensible. For the current list, see `ProviderEnum`
 > ([`src/wisp/providers/base.py`](../src/wisp/providers/base.py)) and
 > `PROVIDERS_MAP`
@@ -27,7 +27,7 @@ Every subcommand accepts a positional `provider` argument (default `aws`;
 
 Provisions a VM and brings the tunnel up.
 
-- `provider` — cloud provider (`aws` or `oci`, default `aws`).
+- `provider` — cloud provider (`aws`, `oci`, or `gcp`, default `aws`).
 - `-r`, `--region` — target region. If omitted, the region is resolved from
   the provider configuration in `wisp.toml` (`[aws].region` or `[oci].region`).
   There is no cross-provider default region.
@@ -125,7 +125,7 @@ Validation errors are shown inline. "Save" stores to the in-memory `AppState`;
 
 ### Deploy screen
 
-- Provider select (`aws` or `oci`).
+- Provider select (`aws`, `oci`, or `gcp`).
 - Region select. On mount, it fetches live regions in a background thread.
 - A summary reflects the current config; "Start Deployment" pushes the
   Progress screen which runs the deployment in a worker thread.

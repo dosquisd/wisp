@@ -2,7 +2,7 @@
 
 Cloud provider abstraction with the AWS and OCI implementations.
 
-> **Note:** As of this writing, Wisp ships with support for `aws` and `oci`.
+> **Note:** As of this writing, Wisp ships with support for `aws`, `oci`, and `gcp`.
 > The provider layer is designed to be extensible — new providers can be added
 > by implementing `BaseProvider` (or extending `PulumiProvider`) and
 > registering them in `PROVIDERS_MAP`
@@ -130,5 +130,50 @@ Module-level `_plugins_ready` flag guards `ensure_plugins()`, which installs the
   (`list_region_subscriptions`); raises `CredentialError` if credentials are
   missing or invalid.
 - `_provider_name` — `"OCI"`.
+- `deploy_vm(...)` / `delete_vm(...)` — shared flow, see
+  [deployment flow](../deployment-flow.md).
+
+## `providers/gcp/`
+
+### `constants.py`
+
+Defaults for the GCP deployment: `DEFAULT_GCP_VM_INSTANCE="e2-micro"`,
+`DEFAULT_GCP_REGION="us-central1"`, `DEFAULT_GCP_ZONE="us-central1-a"`,
+`DEFAULT_GCP_NETWORK="default"`, image family
+(`ubuntu-os-cloud/ubuntu-2404-lts-amd64`), `DEFAULT_GCP_FIREWALL_NAME`,
+and `DEFAULT_GCP_TARGET_TAG="wisp"`. Provisioning uses the SPOT model
+(`on_host_maintenance=TERMINATE`, `instance_termination_action=DELETE`,
+`automatic_restart=False`).
+
+### `pulumi.py` — the Pulumi program
+
+Module-level `_plugins_ready` flag guards `ensure_plugins()`, which installs the
+`gcp` (`v9.37.0`) and `tls` (`v5.5.1`) plugins once.
+
+- `get_default_username(image_family)` — maps image family to default SSH user
+  (`ubuntu`, `debian`; fallback `ubuntu`).
+- `get_firewall(region, force_current_ip=False, ...)` — VPC-level firewall rule
+  on the default network targeting instances by network tag: ingress UDP
+  `wireguard_port` and TCP `22`. Source is `<your-ip>/32` if
+  `force_current_ip` else `0.0.0.0/0`. GCP allows all egress implicitly.
+- `create_gcp_instance(region, /, force_current_ip=False, *, ...)` — the program
+  passed to Pulumi. Creates the firewall rule and a SPOT-scheduled
+  `gcp.compute.Instance` attached to the default network with an ephemeral
+  external IP, an RSA 4096 `tls.PrivateKey` (`algorithm="RSA", rsa_bits=4096`)
+  injected via `ssh_authorized_keys` metadata, and exports: `instance_id`,
+  `instance_public_ip`, `instance_private_ip`, `instance_private_key`,
+  `wireguard_port`, `ssh_user`.
+
+### `provider.py` — `GCPProvider(PulumiProvider)`
+
+- `credentials` (property) — the resolved `GCPCredentials`.
+- `_create_pulumi_program(...)` — wraps `create_gcp_instance`; treats
+  `wireguard_port <= 0` as "random"; zone defaults to `{region}-a`.
+- `get_available_regions()` — the project's regions via the Compute SDK
+  (`compute_v1.RegionsClient.list`); credentials are loaded explicitly
+  (service account file first, then ADC via `google.auth.default`); raises
+  `CredentialError` if the project is not configured or credentials are
+  invalid.
+- `_provider_name` — `"GCP"`.
 - `deploy_vm(...)` / `delete_vm(...)` — shared flow, see
   [deployment flow](../deployment-flow.md).

@@ -43,7 +43,7 @@ Adds the repo root to `sys.path` and runs `WispApp()` — enables
 | -------- | ---------------- |
 | `MainMenuScreen` | Banner, live config summary, navigation (`1` deploy, `2` config, `3` quit) |
 | `ConfigScreen` | Edits `WispConfig` in memory with inline validation; Save / Reset / Back |
-| `DeployScreen` | Provider (aws and oci today — see `ProviderEnum` ([`providers/base.py`](../../src/wisp/providers/base.py)) for the current list) + region selection; fetches live regions in a worker thread (fallback list on failure); pushes `ProgressScreen` |
+| `DeployScreen` | Provider (aws, oci, and gcp today — see `ProviderEnum` ([`providers/base.py`](../../src/wisp/providers/base.py)) for the current list) + region selection; fetches live regions in a worker thread (fallback list on failure); pushes `ProgressScreen` |
 | `ProgressScreen` | Runs `deploy_vm`/`delete_vm` in a worker thread, marshals progress to the UI via `call_from_thread`, shows results and a Destroy button |
 
 ### Threading note

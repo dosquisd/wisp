@@ -82,7 +82,7 @@ stable.
 | User ↔ daemon | Unix socket `0660 root:wisp` (Linux/macOS) or Named Pipe with SIDs (Windows) | Group-gated privileged control |
 | Local ↔ VM | SSH with generated RSA 4096 key | Key stored `0600`/icacls, removed on destroy |
 | Internet ↔ VM | Cloud security group/list | Optionally pinned to your `/32` |
-| Cloud API | Your cloud credentials/environment | Wisp does not manage credentials; uses default chain or `wisp.toml` config |
+| Cloud API | Your cloud credentials/environment | Wisp does not manage credentials; each provider uses its standard CLI/SDK credential chain |
 
 ## Operational cautions
 

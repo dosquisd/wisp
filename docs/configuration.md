@@ -107,6 +107,25 @@ not exist.
 | `DEFAULT_INSTANCE_NAME_PREFIX` | `"wisp-instance"` |
 | `DEFAULT_KEY_PAIR_NAME` | `"wisp-key-pair"` |
 
+## GCP constants (`providers/gcp/constants.py`)
+
+| Constant | Value |
+| ---------- | ------- |
+| `DEFAULT_GCP_VM_INSTANCE` | `"e2-micro"` |
+| `DEFAULT_GCP_REGION` | `"us-central1"` |
+| `DEFAULT_GCP_ZONE` | `"us-central1-a"` |
+| `DEFAULT_GCP_NETWORK` | `"default"` |
+| `DEFAULT_IMAGE_PROJECT` | `"ubuntu-os-cloud"` |
+| `DEFAULT_IMAGE_FAMILY` | `"ubuntu-2404-lts-amd64"` |
+| `DEFAULT_GCP_FIREWALL_NAME` | `"wisp-firewall"` |
+| `DEFAULT_GCP_TARGET_TAG` | `"wisp"` |
+
+> GCP provisioning uses the **SPOT model**: `on_host_maintenance=TERMINATE`,
+> `instance_termination_action=DELETE`, `automatic_restart=False`. The
+> instance attaches to the default VPC network with an ephemeral external IP;
+> ingress is opened via a VPC-level firewall rule targeting the instance by
+> network tag.
+
 ## Daemon / protocol constants
 
 - `UnixSocketTransport.SOCKET_PATH = "/run/wisp.sock"` (`daemon/transport.py`).
@@ -133,41 +152,100 @@ not exist.
 
 ## Provider configuration (`wisp.toml`)
 
-Per-provider settings are stored in the `[aws]` and `[oci]` sections of
-`wisp.toml` (the providers supported today; see `ProviderEnum`
+Per-provider settings are stored in the `[aws]`, `[oci]`, and `[gcp]` sections
+of `wisp.toml` (the providers supported today; see `ProviderEnum`
 ([`src/wisp/providers/base.py`](../src/wisp/providers/base.py)) for the
 current list). These sections are optional; if omitted, the provider SDK uses
 its default credential chain.
 
+Here is what a `wisp.toml` looks like with every section filled in (all
+values are examples — copy [`wisp.toml.example`](../wisp.toml.example) as a
+starting point):
+
+```toml
+[general]
+default_provider = "aws"
+vm_boot_timeout = 60
+wireguard_interface = "wg0"
+force_current_ip = false
+
+[aws]
+region = "us-east-2"
+
+[oci]
+region = "sa-bogota-1"
+compartment_ocid = "ocid1.compartment.oc1..aaaaaaa..."
+
+[gcp]
+project_id = "my-project-123456"
+region = "us-central1"
+zone = "us-central1-a"
+credentials_path = "/home/user/keys/sa-key.json"
+```
+
+The per-field details for each section follow.
+
 ### `[aws]` section
 
-| Field | Type | Default | Meaning |
-| ------- | ------ | --------- | --------- |
+AWS credentials are **not** configured in this section — per the
+[Pulumi AWS installation & configuration
+docs](https://www.pulumi.com/registry/packages/aws/installation-configuration/),
+Pulumi and boto3 use the standard AWS CLI/SDK credential chain (env vars,
+`~/.aws/credentials`, `~/.aws/config`, IAM roles). Configure them via
+`aws configure` or environment variables instead.
+
+|  Field   | Type  |       Default        |          Meaning           |
+|----------|-------|----------------------|----------------------------|
 | `region` | `str` | `AWS_DEFAULT_REGION` | AWS region for deployments |
-| `profile` | `str` | `""` | AWS CLI profile name (e.g. `"default"`, `"work"`) |
-| `access_key_id` | `str` | `""` | Explicit access key (prefer `profile`) |
-| `secret_access_key` | `str` | `""` | Explicit secret key (prefer `profile`) |
-| `session_token` | `str` | `""` | Session token for temporary credentials |
 
 ### `[oci]` section
+
+OCI credentials are **not** configured in this section — per the
+[Pulumi OCI installation & configuration
+docs](https://www.pulumi.com/registry/packages/oci/installation-configuration/),
+Pulumi and the OCI SDK use the standard OCI config chain (`~/.oci/config`
+profile-based, env vars). Configure them via `oci setup config` or
+environment variables instead.
 
 | Field | Type | Default | Meaning |
 | ------- | ------ | --------- | --------- |
 | `region` | `str` | `""` (SDK default) | OCI region for deployments (e.g. `"sa-bogota-1"`) |
-| `profile` | `str` | `"DEFAULT"` | Profile name in `~/.oci/config` |
-| `tenancy_ocid` | `str` | `""` | Tenancy OCID |
-| `user_ocid` | `str` | `""` | User OCID |
-| `fingerprint` | `str` | `""` | API signing key fingerprint |
-| `private_key_path` | `str` | `""` | Path to API signing key (PEM) |
-| `compartment_ocid` | `str` | `OCI_DEFAULT_COMPARTMENT_ID` | Compartment OCID (defaults to tenancy) |
+| `profile` | `str` | `"DEFAULT"` | Profile name in `~/.oci/config` — used to resolve credentials for region listing/validation |
+| `compartment_ocid` | `str` | `OCI_DEFAULT_COMPARTMENT_ID` | Compartment OCID (passed to the Pulumi deploy; defaults to tenancy) |
 
-All fields are optional. When omitted, wisp falls back to the provider's
-standard CLI/SDK credential chain:
+### `[gcp]` section
+
+Everything configured in this section is passed to the Pulumi deploy — per
+the [Pulumi GCP installation & configuration
+docs](https://www.pulumi.com/registry/packages/gcp/installation-configuration/),
+the project, region, and zone go to the `gcp.Provider` resource (whose
+constructor also accepts `credentials`), and `credentials_path`
+authenticates the deploy as the service account (bypassing the gcloud/ADC
+chain).
+
+| Field | Type | Default | Meaning |
+| ------- | ------ | --------- | --------- |
+| `project_id` | `str` | `""` (falls back to `GOOGLE_CLOUD_PROJECT` env var or `google.auth.default()`) | GCP project ID to deploy into |
+| `credentials_path` | `str` | `""` (ADC) | Path to a service account key file (JSON) — authenticates the Pulumi deploy without the gcloud CLI |
+| `region` | `str` | `""` (SDK default) | GCP region for deployments (e.g. `"us-central1"`) |
+| `zone` | `str` | `""` (derived as `{region}-a`) | GCP zone for deployments (e.g. `"us-central1-a"`) |
+
+All fields are optional. Cloud credentials are not configured in `wisp.toml` —
+each provider uses its standard CLI/SDK credential chain for authentication:
 
 - **AWS**: env vars, `~/.aws/credentials`, `~/.aws/config`, IAM roles
+  (`aws configure` / environment variables)
 - **OCI**: `~/.oci/config` profile, env vars (`OCI_TENANCY`, `OCI_USER`,
-  `OCI_FINGERPRINT`, `OCI_PRIVATE_KEY_PATH`, `OCI_REGION`)
+  `OCI_FINGERPRINT`, `OCI_PRIVATE_KEY_PATH`, `OCI_REGION`) — `oci setup config`
+  / environment variables
+- **GCP**: `GOOGLE_CREDENTIALS` / `GOOGLE_APPLICATION_CREDENTIALS` env vars,
+  ADC, or gcloud (`gcloud auth application-default login`)
 
 > **Important**: There is **no cross-provider default region**. Each provider
-> has its own configured region (`[aws].region`, `[oci].region`), which is used
-> when `-r/--region` is not supplied on the CLI.
+> has its own configured region (`[aws].region`, `[oci].region`,
+> `[gcp].region`), which is used when `-r/--region` is not supplied on the CLI.
+>
+> **What each section actually configures**: AWS → region only; OCI → region,
+> profile (for credential resolution/validation), and `compartment_ocid`
+> (passed to the Pulumi deploy); GCP → everything (all fields are passed to
+> the Pulumi deploy or used by wisp's own SDK calls).
