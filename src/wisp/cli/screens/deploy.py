@@ -4,9 +4,9 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Center, Horizontal, Vertical
-from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Label, Select, Static
 
+from wisp.cli.screens.base import WispScreen
 from wisp.cli.screens.progress import ProgressScreen
 from wisp.providers import PROVIDERS_MAP, ProviderEnum
 
@@ -40,8 +40,21 @@ FALLBACK_OCI_REGIONS = [
     "me-jeddah-1",
 ]
 
+# Static region list for GCP (fallback)
+FALLBACK_GCP_REGIONS = [
+    "us-central1",
+    "us-east1",
+    "us-west1",
+    "europe-west1",
+    "europe-west3",
+    "asia-east1",
+    "asia-southeast1",
+    "southamerica-east1",
+    "australia-southeast1",
+]
 
-class DeployScreen(Screen):
+
+class DeployScreen(WispScreen):
     """Provider/region selection with a live deploy summary."""
 
     BINDINGS = [
@@ -103,6 +116,7 @@ class DeployScreen(Screen):
                         options=[
                             ("Amazon Web Services (AWS)", "aws"),
                             ("Oracle Cloud Infrastructure (OCI)", "oci"),
+                            ("Google Cloud Platform (GCP)", "gcp"),
                         ],
                         value="aws",
                         allow_blank=False,
@@ -152,6 +166,8 @@ class DeployScreen(Screen):
         """Get fallback regions for a provider."""
         if provider == "oci":
             return FALLBACK_OCI_REGIONS
+        elif provider == "gcp":
+            return FALLBACK_GCP_REGIONS
         return FALLBACK_AWS_REGIONS
 
     def on_mount(self) -> None:
