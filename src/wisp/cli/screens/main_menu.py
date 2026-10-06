@@ -2,31 +2,69 @@
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Center, Vertical
-from textual.screen import Screen
+from textual.containers import CenterMiddle, Vertical
 from textual.widgets import Button, Footer, Header, Static
 
+from wisp.cli.screens.base import WispScreen
 
-class MainMenuScreen(Screen):
+
+class MainMenuScreen(WispScreen):
     """Landing screen; shows current config and navigates to other screens."""
 
     BINDINGS = [
-        Binding("1", "deploy", "Desplegar", show=False),
-        Binding("2", "config", "Configuración", show=False),
-        Binding("3", "quit", "Salir", show=False),
+        Binding("1", "deploy", "Desplegar", show=True),
+        Binding("2", "config", "Configuración", show=True),
+        Binding("3", "quit", "Salir", show=True),
     ]
 
+    # Rendered with the official figlet "ANSI Shadow" W/I/S/P glyphs
+    # (no shade characters, every line padded to the same 29-column width
+    # so the letters align exactly on any terminal).
     BANNER = (
-        "[bold cyan]  █     █░ ██▓  ██████  ██▓███  \n"
-        " ▓█░ █ ░█░▓██▒▒██    ▒ ▓██░  ██▒\n"
-        " ▒█░ █ ░█ ▒██▒░ ▓██▄   ▓██░ ██▓▒\n"
-        " ░█░ █ ░█ ░██░  ▒   ██▒▒██▄█▓▒ ▒\n"
-        " ░░███▒███ ░██░▒██████▒▒▒██▒ ░  ░[/bold cyan]"
+        "[bold cyan]██╗    ██╗██╗███████╗██████╗ \n"
+        "██║    ██║██║██╔════╝██╔══██╗\n"
+        "██║ █╗ ██║██║███████╗██████╔╝\n"
+        "██║███╗██║██║╚════██║██╔═══╝ \n"
+        "╚███╔███╔╝██║███████║██║     \n"
+        " ╚══╝╚══╝ ╚═╝╚══════╝╚═╝     [/bold cyan]"
     )
+
+    # Scoped to this screen only (doesn't touch .title/.subtitle/.btn-* on
+    # other screens, which legitimately need the roomier default spacing).
+    # This menu is the one screen where scrolling to reach "Salir" is
+    # actually bad UX — it's the exit door — so every row here is trimmed
+    # to make the whole card fit without scrolling on a normal terminal.
+    # Padding drops to 0 vertical (the round border already provides
+    # visual separation) to offset the banner's sixth line.
+    CSS = """
+    MainMenuScreen .card {
+        padding: 0 2;
+    }
+
+    MainMenuScreen .title {
+        margin-bottom: 0;
+    }
+
+    MainMenuScreen .subtitle {
+        margin-bottom: 0;
+    }
+
+    #status-preview {
+        margin-bottom: 0;
+    }
+
+    #btn-deploy {
+        margin-top: 1;
+    }
+
+    #btn-config, #btn-quit {
+        margin-top: 0;
+    }
+    """
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        with Center():
+        with CenterMiddle():
             with Vertical(classes="card"):
                 yield Static(self.BANNER, classes="title")
                 yield Static(
@@ -83,7 +121,7 @@ class MainMenuScreen(Screen):
             f"[dim]Región:[/dim] [yellow]{state.selected_region}[/yellow]\n"
             f"[dim]Timeout:[/dim] [white]{cfg.vm_boot_timeout}s[/white]   "
             f"[dim]Puerto:[/dim] [white]{port_str}[/white]\n"
-            f"[dim]Firewall:[/dim] [white]{ip_mode}[/white]\n"
+            f"[dim]Firewall:[/dim] [white]{ip_mode}[/white]"
         )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
