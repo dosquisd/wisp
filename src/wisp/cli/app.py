@@ -101,6 +101,14 @@ class WispApp(App):
     .btn-danger:hover {
         background: #b91c1c;
     }
+
+    Input:focus, Select:focus, Switch:focus {
+        border: tall #38bdf8;
+    }
+
+    Button:focus {
+        text-style: bold reverse;
+    }
     """
 
     def __init__(self) -> None:
@@ -109,6 +117,14 @@ class WispApp(App):
 
     def on_mount(self) -> None:
         """Install the app screens and show the main menu."""
+        try:
+            from wisp.config.settings import describe_config_sources
+            from wisp.utils import logger
+
+            logger.info(describe_config_sources())
+        except Exception:
+            pass  # purely informational; never block startup over this
+
         self.install_screen(MainMenuScreen(), name="main_menu")
         self.install_screen(ConfigScreen(), name="config")
         self.install_screen(DeployScreen(), name="deploy")
