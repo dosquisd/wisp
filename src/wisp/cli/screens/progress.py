@@ -4,14 +4,14 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Center, Horizontal, Vertical
-from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, ProgressBar, Static
 
+from wisp.cli.screens.base import WispScreen
 from wisp.providers import PROVIDERS_MAP, ProviderEnum
 from wisp.providers.base import DeployVMResult
 
 
-class ProgressScreen(Screen):
+class ProgressScreen(WispScreen):
     """Drives a deploy (and optional destroy) and renders live progress.
 
     Provider calls run in Textual worker threads; UI updates are marshaled back
