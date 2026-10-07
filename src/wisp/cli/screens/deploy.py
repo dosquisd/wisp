@@ -9,6 +9,7 @@ from textual.widgets import Button, Footer, Header, Label, Select, Static
 from wisp.cli.screens.base import WispScreen
 from wisp.cli.screens.progress import ProgressScreen
 from wisp.providers import PROVIDERS_MAP, ProviderEnum
+from wisp.providers.base import get_provider_display_name
 
 # Static region list used until live AWS regions are fetched (or if that fails).
 FALLBACK_AWS_REGIONS = [
@@ -62,34 +63,39 @@ class DeployScreen(WispScreen):
     ]
 
     CSS = """
+    /* The deploy card must fit a 24-row terminal without scrolling: a scroll on
+       this screen hides exactly what matters — the Start/Cancel buttons. All
+       margins here are trimmed hard, and the card padding is dropped, to keep
+       the whole card at 18 rows (it was 31). */
+    #deploy-card {
+        padding: 0 2;
+    }
+
+    #deploy-card .title {
+        margin-bottom: 0;
+    }
+
+    #deploy-card .subtitle {
+        margin-bottom: 0;
+    }
+
     #deploy-container {
         height: auto;
-        margin-bottom: 1;
     }
 
     #deploy-container Label {
         color: #94a3b8;
-        margin-top: 1;
     }
 
     #region-status {
         height: 1;
-        margin-top: 0;
-        margin-bottom: 1;
     }
 
     #deploy-summary {
         background: #0b0f19;
         border: solid #334155;
         padding: 0 1;
-        margin-top: 1;
-        margin-bottom: 1;
         height: auto;
-    }
-
-    .btn-group {
-        height: 3;
-        margin-top: 1;
     }
 
     .btn-group Button {
@@ -101,7 +107,7 @@ class DeployScreen(WispScreen):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Center():
-            with Vertical(classes="card"):
+            with Vertical(classes="card", id="deploy-card"):
                 yield Static(
                     "[bold cyan]Asistente de Despliegue[/bold cyan]", classes="title"
                 )
@@ -111,6 +117,7 @@ class DeployScreen(WispScreen):
                 )
 
                 with Vertical(id="deploy-container"):
+                    provider_val = self._initial_provider()
                     yield Label("1. Proveedor de Infraestructura:")
                     yield Select(
                         options=[
@@ -118,14 +125,14 @@ class DeployScreen(WispScreen):
                             ("Oracle Cloud Infrastructure (OCI)", "oci"),
                             ("Google Cloud Platform (GCP)", "gcp"),
                         ],
-                        value="aws",
+                        value=provider_val,
                         allow_blank=False,
                         id="select-provider",
                     )
 
                     yield Label("2. Región de Despliegue:")
                     current_region = self.app.state.selected_region  # type: ignore[attr-defined]
-                    regions = self._get_fallback_regions("aws")
+                    regions = self._get_fallback_regions(provider_val)
                     if current_region in regions:
                         regions = [
                             current_region,
@@ -144,7 +151,8 @@ class DeployScreen(WispScreen):
 
                     yield Label("3. Resumen y Confirmación:")
                     yield Static(
-                        self._build_summary(current_region), id="deploy-summary"
+                        self._build_summary(current_region, provider_val),
+                        id="deploy-summary",
                     )
 
                 with Horizontal(classes="btn-group"):
@@ -162,6 +170,16 @@ class DeployScreen(WispScreen):
                     )
         yield Footer()
 
+    def _initial_provider(self) -> str:
+        """Return the provider to preselect in the provider Select.
+
+        Falls back to ``"aws"`` when the state carries a value the Select has no
+        option for, so the widget never starts on a blank selection.
+        """
+        candidate = str(self.app.state.provider_name)  # type: ignore[attr-defined]
+        known = {p.value for p in ProviderEnum}
+        return candidate if candidate in known else ProviderEnum.AWS.value
+
     def _get_fallback_regions(self, provider: str) -> list[str]:
         """Get fallback regions for a provider."""
         if provider == "oci":
@@ -176,7 +194,9 @@ class DeployScreen(WispScreen):
     def on_screen_resume(self) -> None:
         region_select = self.query_one("#select-region", Select)
         current = str(region_select.value)
-        self.query_one("#deploy-summary", Static).update(self._build_summary(current))
+        self.query_one("#deploy-summary", Static).update(
+            self._build_summary(current, self._initial_provider())
+        )
 
     @work(thread=True)
     def fetch_live_regions(self) -> None:
@@ -201,13 +221,13 @@ class DeployScreen(WispScreen):
             region_select.value = current_val
 
             provider_val = str(self.query_one("#select-provider", Select).value)
-            provider_name = "AWS" if provider_val == "aws" else "OCI"
+            provider_name = get_provider_display_name(provider_val)
             status = self.query_one("#region-status", Static)
             status.update(
                 f"[green]✓ {len(regions)} regiones disponibles en {provider_name}[/green]"
             )
             self.query_one("#deploy-summary", Static).update(
-                self._build_summary(str(current_val))
+                self._build_summary(str(current_val), provider_val)
             )
         except Exception:
             pass
@@ -216,7 +236,7 @@ class DeployScreen(WispScreen):
         try:
             status = self.query_one("#region-status", Static)
             provider_val = str(self.query_one("#select-provider", Select).value)
-            provider_name = "AWS" if provider_val == "aws" else "OCI"
+            provider_name = get_provider_display_name(provider_val)
             status.update(
                 f"[dim](Usando lista estándar de regiones {provider_name})[/dim]"
             )
@@ -229,15 +249,29 @@ class DeployScreen(WispScreen):
             self.fetch_live_regions()
         elif event.select.id == "select-region" and event.value is not Select.BLANK:
             self.query_one("#deploy-summary", Static).update(
-                self._build_summary(str(event.value))
+                self._build_summary(
+                    str(event.value),
+                    str(self.query_one("#select-provider", Select).value),
+                )
             )
 
-    def _build_summary(self, region: str) -> str:
-        """Build the deployment summary text for the given region."""
+    def _build_summary(self, region: str, provider_val: str) -> str:
+        """Build the deployment summary text for the given region.
+
+        The provider is passed in rather than read from the widget: this runs
+        during :meth:`compose`, before the Selects exist in the DOM, so querying
+        ``#select-provider`` at that point raises ``NoMatches``.
+
+        Args:
+            region (str): Region to describe.
+            provider_val (str): Selected provider identifier.
+
+        Returns:
+            str: Markup for the summary panel.
+        """
         state = self.app.state  # type: ignore[attr-defined]
         cfg = state.config
-        provider_val = str(self.query_one("#select-provider", Select).value)
-        provider_name = "AWS" if provider_val == "aws" else "OCI"
+        provider_name = get_provider_display_name(provider_val)
         port_text = (
             f"UDP {cfg.wireguard_port}" if cfg.wireguard_port > 0 else "Aleatorio"
         )
@@ -256,8 +290,7 @@ class DeployScreen(WispScreen):
         return (
             f"[cyan]Destino:[/cyan] {provider_name} ({region})   [cyan]Timeout:[/cyan] {cfg.vm_boot_timeout}s\n"
             f"[cyan]Puerto:[/cyan] {port_text}   [cyan]DNS:[/cyan] {cfg.wireguard_dns1}, {cfg.wireguard_dns2}\n"
-            f"[cyan]Firewall:[/cyan] {ip_mode}\n"
-            f"[cyan]Credenciales:[/cyan] {cred_status}"
+            f"[cyan]Firewall:[/cyan] {ip_mode}   [cyan]Credenciales:[/cyan] {cred_status}"
         )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
