@@ -39,6 +39,9 @@
 # wireguard_dns2 = "1.0.0.1"
 # wireguard_port = 0              # 0 selects a random port (49152-65535)
 # force_current_ip = false        # restrict firewall + AllowedIPs to /32
+# confirm_destroy = true          # ask before tearing down the VPN from the
+                                  # tunnel view; "no volver a preguntar" in the
+                                  # dialog flips this off and saves it here
 
 
 [aws]

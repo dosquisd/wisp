@@ -242,6 +242,7 @@ def save_session_config(
             "wireguard_dns2": cfg.wireguard_dns2,
             "wireguard_port": cfg.wireguard_port,
             "force_current_ip": cfg.force_current_ip,
+            "confirm_destroy": cfg.confirm_destroy,
         }
     )
 
@@ -279,6 +280,10 @@ class WispConfig:
             ``49152-65535``.
         force_current_ip (bool): If true, restrict the firewall and client
             AllowedIPs to your current public IP (``/32``).
+        confirm_destroy (bool): If true, the tunnel view asks for confirmation
+            before tearing the VPN down (``d``/``esc``/the destroy button). The
+            ``no volver a preguntar`` checkbox in that dialog flips it off and
+            persists it to ``[general]``.
     """
 
     vm_boot_timeout: int = DEFAULT_VM_BOOT_TIMEOUT_SECONDS
@@ -289,6 +294,7 @@ class WispConfig:
     wireguard_dns2: str = WIREGUARD_DNS2
     wireguard_port: int = 0  # 0 indicates dynamic random port (49152-65535)
     force_current_ip: bool = False
+    confirm_destroy: bool = True
 
 
 def load_wisp_config() -> WispConfig:
@@ -310,4 +316,5 @@ def load_wisp_config() -> WispConfig:
         wireguard_dns2=general.get("wireguard_dns2", WIREGUARD_DNS2),
         wireguard_port=int(general.get("wireguard_port", 0)),
         force_current_ip=bool(general.get("force_current_ip", False)),
+        confirm_destroy=bool(general.get("confirm_destroy", True)),
     )

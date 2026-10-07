@@ -6,6 +6,8 @@ from textual.containers import CenterMiddle, Vertical
 from textual.widgets import Button, Footer, Header, Static
 
 from wisp.cli.screens.base import WispScreen
+from wisp.cli.screens.shutdown import ShutdownScreen, request_shutdown
+from wisp.session import find_orphaned_session
 
 
 class MainMenuScreen(WispScreen):
@@ -15,6 +17,7 @@ class MainMenuScreen(WispScreen):
         Binding("1", "deploy", "Desplegar", show=True),
         Binding("2", "config", "Configuración", show=True),
         Binding("3", "quit", "Salir", show=True),
+        Binding("4", "cleanup_orphan", "Limpiar huérfano", show=False),
     ]
 
     # Rendered with the official figlet "ANSI Shadow" W/I/S/P glyphs
@@ -53,12 +56,24 @@ class MainMenuScreen(WispScreen):
         margin-bottom: 0;
     }
 
-    #btn-deploy {
-        margin-top: 1;
+    /* Textual 8 buttons are 1 row tall, so the default `.btn-*` margin-top: 1
+       made every option occupy a 2-row pitch and the menu read as a sparse
+       list. Pinning the margin to 0 halves that pitch; the solid backgrounds
+       still separate the rows, so no gap is needed. */
+    #btn-deploy, #btn-config, #btn-quit {
+        margin-top: 0;
     }
 
-    #btn-config, #btn-quit {
-        margin-top: 0;
+    #orphan-warning {
+        display: none;
+        height: auto;
+        color: #fbbf24;
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    #btn-orphan-cleanup {
+        display: none;
     }
     """
 
@@ -70,6 +85,7 @@ class MainMenuScreen(WispScreen):
                 yield Static(
                     "VPNs efímeras de WireGuard bajo demanda", classes="subtitle"
                 )
+                yield Static("", id="orphan-warning", classes="orphan-warning")
                 yield Static(self._get_status_text(), id="status-preview")
                 yield Button(
                     "1. Desplegar VPN",
@@ -89,10 +105,72 @@ class MainMenuScreen(WispScreen):
                     variant="error",
                     classes="btn-danger",
                 )
+                # Composed LAST, on purpose: Textual focuses the first focusable
+                # widget on mount, and this one is usually hidden. Yielded first
+                # it would win the autofocus, and since a `display: none` widget
+                # is still walked by `focus_next`, the very first arrow press
+                # would strand focus on an invisible button and trap the user.
+                # `can_focus=False` makes that structurally impossible; the row
+                # stays reachable through the `4` binding and the mouse.
+                orphan_button = Button(
+                    "Limpiar recursos huérfanos",
+                    id="btn-orphan-cleanup",
+                    variant="warning",
+                    classes="btn-danger",
+                )
+                orphan_button.can_focus = False
+                yield orphan_button
         yield Footer()
 
     def on_screen_resume(self) -> None:
         self.update_status()
+        self.refresh_orphan_row()
+
+    def refresh_orphan_row(self) -> None:
+        """Show the orphan-cleanup row only while an orphan actually exists.
+
+        The row is what makes the startup warning actionable: a marker whose
+        owning process is gone means a VM is still running and still billing,
+        and this is the one screen reachable without leaving the TUI.
+        """
+        try:
+            warning = self.query_one("#orphan-warning", Static)
+            button = self.query_one("#btn-orphan-cleanup", Button)
+        except Exception:
+            return
+
+        orphan = find_orphaned_session()
+        if orphan is None:
+            warning.display = False
+            button.display = False
+            return
+
+        warning.display = True
+        button.display = True
+        warning.update(
+            f"[bold yellow]⚠ Sesión huérfana[/bold yellow]\n"
+            f"[dim]{orphan.provider.upper()}/{orphan.region} "
+            f"activada por el proceso {orphan.pid}, "
+            f"que ya no existe. Sus recursos siguen facturando.[/dim]"
+        )
+        # The key hint is in the label because the footer binding is hidden:
+        # the row appears conditionally, so a static footer entry would either
+        # advertise a key that does nothing or lie about what exists.
+        button.label = f"4. Limpiar recursos huérfanos ({orphan.provider.upper()})"
+
+    def action_cleanup_orphan(self) -> None:
+        """Destroy the resources left behind by a dead run."""
+        orphan = find_orphaned_session()
+        if orphan is None:
+            self.refresh_orphan_row()
+            return
+        self.app.push_screen(
+            ShutdownScreen(
+                reason="orphaned session cleanup",
+                exit_after=False,
+                orphan=orphan,
+            )
+        )
 
     def update_status(self) -> None:
         """Refresh the configuration summary widget."""
@@ -129,14 +207,29 @@ class MainMenuScreen(WispScreen):
             self.action_deploy()
         elif event.button.id == "btn-config":
             self.action_config()
+        elif event.button.id == "btn-orphan-cleanup":
+            self.action_cleanup_orphan()
         elif event.button.id == "btn-quit":
-            self.app.exit()
+            self.action_quit()
 
     def action_deploy(self) -> None:
+        """Open the deploy wizard.
+
+        A live tunnel is unreachable from here: once a deployment succeeds the
+        tunnel view replaces this screen, and every exit from it destroys the
+        session. The menu only ever shows while nothing is running.
+        """
         self.app.push_screen("deploy")
 
     def action_config(self) -> None:
         self.app.push_screen("config")
 
     def action_quit(self) -> None:
-        self.app.exit()
+        """Destroy any active session, then exit.
+
+        Quitting with a tunnel up must not leave a VM running, so the session
+        guard is asked to tear it down first. Ephemeral VPNs make this the
+        right default: losing one costs a redeploy, leaking one costs money
+        until it is noticed.
+        """
+        request_shutdown(self.app, "quitted from the main menu")
