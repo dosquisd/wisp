@@ -45,5 +45,11 @@ line-ending = "auto"
 
 [dependency-groups]
 dev = [
-    "ruff>=0.16.5",
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.16.10",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
