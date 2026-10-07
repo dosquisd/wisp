@@ -1,7 +1,9 @@
 """Remote WireGuard server configuration via Paramiko (SSH/SFTP)."""
 
+import re
 import stat
 import time
+from collections.abc import Callable
 
 import paramiko
 
@@ -13,7 +15,10 @@ from wisp.schemas import InventoryContext
 from wisp.utils import logger
 
 
-def configure_remote_server(inventory_context: InventoryContext) -> None:
+def configure_remote_server(
+    inventory_context: InventoryContext,
+    on_progress: Callable[[str, float | None], None] | None = None,
+) -> None:
     """
     Configure the remote WireGuard server using Paramiko (SSH/SFTP).
 
@@ -22,8 +27,21 @@ def configure_remote_server(inventory_context: InventoryContext) -> None:
     generated client configuration.
 
     Args:
-        inventory_context (InventoryContext): Context containing variables for the WireGuard installation.
+        inventory_context (InventoryContext): Context containing variables for
+            the WireGuard installation.
+        on_progress (Callable[[str, float | None], None] | None): Optional
+            callback receiving human-readable progress updates (message, and a
+            percentage, or ``None`` while indeterminate). The installer output is
+            streamed through it, throttled to one update per second, so a long
+            install never looks like a hang.
     """
+
+    # A namespace object can't be refreshed after `paramiko` connect; each
+    # phase reports through this so screen code stays fully decoupled.
+    def _report(message: str, progress: float | None = None) -> None:
+        if on_progress is not None:
+            on_progress(message, progress)
+
     ssh_user = inventory_context["ssh_user"]
     instance_ip = inventory_context["instance_ip"]
     ssh_key_file = inventory_context["ssh_key_file"]
@@ -61,6 +79,7 @@ def configure_remote_server(inventory_context: InventoryContext) -> None:
 
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    _report("Conectando al servidor por SSH...")
 
     try:
         # Connect via SSH using the private key (try multiple key types for PKCS#8/OpenSSH)
@@ -93,6 +112,7 @@ def configure_remote_server(inventory_context: InventoryContext) -> None:
         logger.debug(f"SSH connection established to {ssh_user}@{instance_ip}")
 
         # Upload the install script via SFTP
+        _report("Cargando el instalador de WireGuard al servidor...")
         sftp = ssh.open_sftp()
         remote_script_path = "/tmp/wireguard-install.sh"
         sftp.put(str(WIREGUARD_SCRIPT_PATH), remote_script_path)
@@ -109,11 +129,38 @@ def configure_remote_server(inventory_context: InventoryContext) -> None:
         env_prefix = " ".join(f"{k}={v}" for k, v in env_vars.items())
         command = f"sudo {env_prefix} {remote_script_path}"
         logger.debug(f"Executing remote command: {command}")
+        _report("Instalando WireGuard en el servidor (puede tardar varios minutos)...")
 
         # Execute the script with a pseudo-terminal for sudo
         stdin, stdout, stderr = ssh.exec_command(command, get_pty=True, timeout=300)
 
-        # Stream output in real-time
+        # Stream the installer output in real-time. `recv_exit_status()` blocks
+        # until the script exits and delivers *no* output while running, so a
+        # minutes-long install would otherwise sit frozen on one status line.
+        # Read lines as they arrive instead, throttling UI updates to one per
+        # second (the installer floods progress bars for apt-get, etc.).
+        last_report: float = time.monotonic()
+
+        def _stream_installer_output() -> None:
+            nonlocal last_report
+            for raw in stdout:
+                raw_text = (
+                    raw.decode(errors="replace") if isinstance(raw, bytes) else raw
+                )
+                line = re.sub(
+                    r"\x1b\[[0-9;?]*[A-Za-z]",
+                    "",
+                    raw_text.replace("\r", ""),
+                ).strip()
+                if not line:
+                    continue
+                logger.debug(line)
+                now = time.monotonic()
+                if now - last_report >= 1.0:
+                    last_report = now
+                    _report(line, None)
+
+        _stream_installer_output()
         exit_status = stdout.channel.recv_exit_status()
         stdout_text = stdout.read().decode()
         stderr_text = stderr.read().decode()
@@ -133,6 +180,7 @@ def configure_remote_server(inventory_context: InventoryContext) -> None:
 
         # Wait a moment for the client config file to be created
         time.sleep(2)
+        _report("Descargando la configuración del cliente...")
 
         # Download the client configuration via SFTP
         sftp = ssh.open_sftp()

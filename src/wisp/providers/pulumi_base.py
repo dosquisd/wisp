@@ -203,8 +203,10 @@ class PulumiProvider(BaseProvider, ABC):
         if on_progress:
             on_progress("Instalando y configurando WireGuard vía SSH...", 0.85)
 
-        # Configure the remote WireGuard server and the local WireGuard client
-        configure_remote_server(template_context)
+        # Configure the remote WireGuard server and the local WireGuard client.
+        # configure_remote_server streams its own granular progress (connect,
+        # upload, live installer output, download) through the same callback.
+        configure_remote_server(template_context, on_progress=on_progress)
         connect_response = connect_wireguard_client(
             WIREGUARD_CLIENT_CONF_PATH.read_text()
         )
@@ -237,6 +239,8 @@ class PulumiProvider(BaseProvider, ABC):
         """
         logger.info(f"Deleting VM in region '{region}' ({self._provider_name})...")
 
+        if on_progress:
+            on_progress("Desconectando el cliente WireGuard...", 0.1)
         logger.debug("Disconnecting WireGuard client...")
         disconnect_response = disconnect_wireguard_client()
         if not disconnect_response.ok:
@@ -250,6 +254,8 @@ class PulumiProvider(BaseProvider, ABC):
             provider=self._provider_name.lower(),
         )  # type: ignore
 
+        if on_progress:
+            on_progress("Destruyendo la infraestructura en el proveedor...", 0.4)
         logger.debug("Destroying Pulumi stack...")
         try:
             destroy_result = stack.destroy()
@@ -257,6 +263,8 @@ class PulumiProvider(BaseProvider, ABC):
             logger.error(f"Error destroying stack: {e}")
             return 0
 
+        if on_progress:
+            on_progress("Eliminando claves y configuración local...", 0.8)
         # Remove the WireGuard related files if they exist
         logger.debug("Removing WireGuard related files...")
         if WIREGUARD_KEY_PATH.exists():
