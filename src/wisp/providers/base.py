@@ -25,6 +25,40 @@ class ProviderEnum(enum.Enum):
     AWS = "aws"
     OCI = "oci"
     GCP = "gcp"
+    UNKNOWN = "unknown"
+
+
+def get_provider_enum(provider_name: str) -> ProviderEnum:
+    """Return the :class:`ProviderEnum` for a given provider name.
+
+    Args:
+        provider_name (str): Provider name, e.g., ``"aws"``.
+
+    Returns:
+        ProviderEnum: Corresponding enum value, or ``ProviderEnum.UNKNOWN`` if
+            the name is unrecognized.
+    """
+    try:
+        return ProviderEnum(provider_name.lower())
+    except ValueError:
+        return ProviderEnum.UNKNOWN
+
+
+def get_provider_display_name(provider: str) -> str:
+    """Return the human-readable name for a provider identifier.
+
+    Args:
+        provider (str): Provider identifier, e.g. ``"aws"``.
+
+    Returns:
+        str: Display name, uppercased as a fallback for unknown identifiers so
+            the UI never shows an empty label.
+    """
+    provider_enum = get_provider_enum(provider)
+    if provider_enum == ProviderEnum.UNKNOWN:
+        return provider.upper()
+
+    return provider_enum.name
 
 
 class CredentialError(RuntimeError):

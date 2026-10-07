@@ -17,7 +17,8 @@ from wisp.config.settings import (
     load_wisp_config,
     reload_toml_config,
 )
-from wisp.providers.base import DeployVMResult
+from wisp.providers.base import DeployVMResult, ProviderEnum, get_provider_enum
+from wisp.session import SessionGuard
 
 
 def _default_region_for_default_provider() -> str:
@@ -36,6 +37,8 @@ class AppState:
         selected_region (str): Selected deployment region.
         last_deployment (DeployVMResult | None): Result of the most recent
             deployment, if any.
+        session_guard (SessionGuard): Releases the active session's resources on
+            shutdown. Armed once a tunnel is up; see :mod:`wisp.session`.
         aws_credentials (AWSCredentials): Resolved AWS credentials.
         oci_credentials (OCICredentials): Resolved OCI credentials.
         gcp_credentials (GCPCredentials): Resolved GCP credentials.
@@ -45,6 +48,7 @@ class AppState:
     provider_name: str = field(default_factory=get_default_provider)
     selected_region: str = field(default_factory=_default_region_for_default_provider)
     last_deployment: DeployVMResult | None = None
+    session_guard: SessionGuard = field(default_factory=SessionGuard)
     aws_credentials: AWSCredentials = field(default_factory=resolve_aws_credentials)
     oci_credentials: OCICredentials = field(default_factory=resolve_oci_credentials)
     gcp_credentials: GCPCredentials = field(default_factory=resolve_gcp_credentials)
@@ -55,13 +59,16 @@ class AppState:
 
     def get_credentials_for_provider(self, provider_name: str):
         """Return resolved credentials for the given provider."""
-        if provider_name == "aws":
-            return self.aws_credentials
-        elif provider_name == "oci":
-            return self.oci_credentials
-        elif provider_name == "gcp":
-            return self.gcp_credentials
-        return None
+        provider_enum = get_provider_enum(provider_name)
+        match provider_enum:
+            case ProviderEnum.AWS:
+                return self.aws_credentials
+            case ProviderEnum.OCI:
+                return self.oci_credentials
+            case ProviderEnum.GCP:
+                return self.gcp_credentials
+            case _:
+                return None
 
     def refresh_credentials(self) -> None:
         """Re-resolve credentials from TOML/env (useful after config changes)."""

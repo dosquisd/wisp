@@ -56,7 +56,8 @@ def _get_user_config_dir() -> Path:
             Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
             / "wisp"
         )
-    elif system == "darwin":
+
+    if system == "darwin":
         return Path.home() / "Library" / "Application Support" / "wisp"
 
     return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "wisp"
@@ -75,6 +76,12 @@ def __prepare_config_file(path: Path) -> None:
 WISP_CONFIG_FILE_NAME: str = "wisp.toml"
 WISP_PROJECT_CONFIG_PATH = ROOTDIR / WISP_CONFIG_FILE_NAME
 WISP_USER_CONFIG_PATH = _get_user_config_dir() / WISP_CONFIG_FILE_NAME
+
+# Marker describing the currently active Wisp session. Written when a tunnel
+# comes up and removed once its resources are destroyed, so a stale file means
+# a previous run died before cleaning up (see wisp.session).
+WISP_ACTIVE_SESSION_FILE_NAME: str = "active-session.json"
+WISP_ACTIVE_SESSION_PATH: Path = _get_user_config_dir() / WISP_ACTIVE_SESSION_FILE_NAME
 
 __prepare_config_file(WISP_USER_CONFIG_PATH)
 __prepare_config_file(WISP_PROJECT_CONFIG_PATH)

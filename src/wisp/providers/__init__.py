@@ -6,7 +6,7 @@ Maps each :class:`ProviderEnum` value to its concrete
 """
 
 from wisp.providers.aws import AWSProvider
-from wisp.providers.base import BaseProvider, ProviderEnum
+from wisp.providers.base import BaseProvider, ProviderEnum, get_provider_enum
 from wisp.providers.gcp import GCPProvider
 from wisp.providers.oci import OCIProvider
 
@@ -17,6 +17,7 @@ __all__ = [
     "OCIProvider",
     "BaseProvider",
     "ProviderEnum",
+    "get_provider_enum",
 ]
 
 

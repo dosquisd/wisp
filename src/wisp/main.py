@@ -183,6 +183,18 @@ def main() -> None:
 
     if command == CommandEnum.DESTROY:
         delete_success = provider.delete_vm(region=region)
+        # If this destroy matches a session the TUI marked as active, clear the
+        # marker: resources are gone, and leaving it would make the next TUI
+        # startup offer to "clean up" an orphan that no longer exists.
+        from wisp.session import clear_active_session, read_active_session
+
+        active = read_active_session()
+        if (
+            active is not None
+            and active.provider == provider_option.value
+            and active.region == region
+        ):
+            clear_active_session()
         print(f"Deleted VM. Count: {delete_success}")
         sys.exit(0)
 
