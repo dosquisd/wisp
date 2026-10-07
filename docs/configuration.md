@@ -21,6 +21,7 @@ back to those constants.
 | `wireguard_dns2` | `str` | `"1.0.0.1"` | Secondary DNS pushed to the client |
 | `wireguard_port` | `int` | `0` | UDP port; `0` means a random port in `49152–65535` |
 | `force_current_ip` | `bool` | `False` | If true, restrict firewall/AllowedIPs to your current public IP (`/32`) |
+| `confirm_destroy` | `bool` | `True` | Ask for confirmation before tearing down the VPN from the tunnel view (`d`/`esc`/the destroy button). The "no volver a preguntar" checkbox in that dialog flips this to `False` and persists it to `[general]` |
 
 The TUI Configuration screen edits these values in memory; the CLI uses the
 TOML-derived defaults (with `force_current_ip` overridable through the provider

@@ -19,11 +19,12 @@ orchestrates three cooperating pieces:
 src/wisp/
 ├── main.py             # Entry point; argparse CLI + TUI dispatch
 ├── schemas.py          # Shared TypedDicts (SSH/WireGuard context for the deploy)
+├── session.py          # Session lifecycle: SessionGuard, active-session marker, teardown
 ├── cli/                # Textual TUI
-│   ├── app.py          # WispApp (global styles, screen registration)
+│   ├── app.py          # WispApp (global styles, screen registration, shutdown wiring)
 │   ├── state.py        # AppState (in-memory session state)
 │   ├── __main__.py     # `python -m wisp.cli` launcher
-│   └── screens/        # MainMenu, Config, Deploy, Progress screens
+│   └── screens/        # MainMenu, Config, Deploy, Progress, Tunnel, Shutdown screens
 ├── config/             # Configuration
 │   ├── settings.py     # TOML loading, WispConfig dataclass, per-provider defaults
 │   ├── credentials.py  # Per-provider credential resolution (AWS/OCI)

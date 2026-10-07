@@ -81,8 +81,77 @@ Entry: `Provider.delete_vm(region, on_progress=None)`.
    - `keys/wireguard-key.pem`
    - `wireguard-confs/wg0-client.conf`
 
-4. **Return** the number of deleted resources
+4. **Clear the active-session marker** (`clear_active_session()`). The marker
+   is the single source of truth for "there are resources out there", so once
+   `delete_vm` has finished it must go — otherwise the next startup would offer
+   to "clean up" an orphan whose cloud resources no longer exist. This happens
+   in `teardown_active_session()` after `delete_vm` returns, and in the CLI
+   `wisp destroy` when the destroy matches the marker's provider + region. If
+   `delete_vm` raises, the marker stays on purpose so the orphan is still
+   detectable next run.
+
+5. **Return** the number of deleted resources
    (`destroy_result.summary.resource_changes["delete"]`, defaulting to `0`).
+
+Throughout, `on_progress` reports granular phases — "Desconectando el cliente",
+"Destruyendo la infraestructura en el proveedor", "Eliminando claves y
+configuración local", "Recursos destruidos" — so the shutdown screen shows real
+state instead of one frozen message.
+
+## Session lifecycle
+
+A deployed tunnel is billable cloud infrastructure, so releasing it is a
+decision of the session rather than a side effect of one exit path. After a
+successful deploy, `ProgressScreen` writes a marker file
+(`active-session.json` in the user config directory) and arms a
+`SessionGuard` (`session.py`) with a teardown that runs `delete_vm`.
+
+Every trigger funnels into that same guard, and the first one to fire wins:
+
+| Trigger | Mechanism |
+|---|---|
+| `q` / `Ctrl+C` on any screen | `WispApp.action_quit` -> `ShutdownScreen` |
+| `esc` / `d` / "Destruir Túnel y Salir" | `TunnelScreen.action_destroy` -> `ShutdownScreen`. Asks first via a confirmation modal unless `[general].confirm_destroy` is `false`; the modal's "no volver a preguntar" checkbox persists that setting. |
+| `SIGHUP` | Terminal window closed -> `install_signal_handlers` -> guard |
+| `SIGTERM` | `kill`, supervisor or session manager -> guard |
+| `SIGINT` | Explicit `kill -INT` or shell job control -> guard |
+| Interpreter exit | `atexit` hook (all platforms) |
+| Previous run died | `find_orphaned_session` warns on next startup |
+
+`ShutdownScreen` owns the actual teardown so the blocking Pulumi destroy shows
+progress instead of freezing the interface. `SessionGuard.shutdown()` is
+idempotent and lock-guarded, so overlapping triggers cannot destroy twice.
+
+A signal handler replaces the signal's default action, so once the handler
+returns the process would keep running with a destroyed tunnel. The handler
+therefore restores the terminal and calls `os._exit(128 + signum)` after the
+teardown, instead of returning into a dead event loop.
+
+### The tunnel view is a terminal state
+
+Once a deployment succeeds, the tunnel view replaces the deploy screens and
+there is **no way back to the menu with a live session**: the VPN is ephemeral,
+so every exit destroys it. `q`, `Ctrl+C`, `esc`, `d`, the button and closing the
+terminal all release the resources, and the main menu is only ever reachable
+while nothing is running.
+
+Esc during an in-flight deploy is the one exception, and it is refused on
+purpose: popping the screen while `deploy_vm` runs in a worker would let the
+resources come up with no guard armed and no marker written, which is precisely
+the invisible orphan this design exists to prevent. The screen explains this and
+points at `q` / `Ctrl+C`.
+
+**Why `Ctrl+C` is a key event, not a signal.** Textual's driver clears the
+terminal's `ISIG` flag, so `Ctrl+C` arrives as a keypress and hits the
+`ctrl+c` binding. That path runs through the same UI as `q`, with progress
+visible, instead of interrupting the event loop from a signal context.
+
+**Platform differences.** Signal handlers are POSIX-only: Windows has no
+`SIGTERM` or `SIGHUP` delivery to arbitrary processes, and console control
+events are shared by the process group. On Windows the teardown is driven by
+keybindings and `atexit`. `SIGKILL` cannot be caught on any platform by design;
+the marker file is the mitigation, since it outlives a hard kill and lets the
+next run report the orphaned resources.
 
 ## Notes on the remote installer
 

@@ -102,6 +102,43 @@ wisp.toml.example                        # Config template (wisp.toml itself is 
 - **SSH keys: RSA 4096** via `pulumi-tls` (`algorithm="RSA", rsa_bits=4096`)
   in ALL providers — **NOT ED25519**. Paramiko loads them supporting
   Ed25519/ECDSA/RSA key formats.
+- **Session lifecycle** (`src/wisp/session.py`): a deployed tunnel is billable
+  infrastructure, so `SessionGuard` owns the teardown and is **idempotent and
+  lock-guarded** — the first trigger wins, later ones are no-ops. Triggers:
+  `q`/`Ctrl+C`, `esc`, `d`, `SIGHUP` (terminal closed), `SIGINT`/`SIGTERM`,
+  `atexit`, and orphan detection on startup. **The tunnel view is a terminal
+  state**: there is deliberately no path back to the menu with a live session,
+  because a tunnel nobody watches is a VM nobody tears down. The one exception
+  is esc during an in-flight deploy, which is refused because popping the screen
+  would let the resources come up with no guard armed. Manual destroy from the
+  tunnel view asks first via `ConfirmDestroyScreen` unless `[general]
+  confirm_destroy = false` (the dialog's "no volver a preguntar" persists it).
+  Signal handlers must exit explicitly (`os._exit(128 + signum)`) after the
+  teardown, since installing a handler replaces the signal's default action.
+  The active-session marker is cleared by `teardown_active_session()` once
+  `delete_vm` returns (and by CLI `wisp destroy` when the destroy matches the
+  marker) — never leave it behind or the next startup "cleans up" an orphan
+  whose resources no longer exist.
+- Never capture a screen (`self`) inside a teardown closure: the screen that
+  started it is swapped out long before it runs — report progress through
+  `app.thread_safe_call` instead.
+- **`Ctrl+C` is a key event, NOT a signal.** Textual's driver clears the
+  terminal's `ISIG` flag (`LinuxDriver._patch_lflag`), so `Ctrl+C` arrives as a
+  keypress on the `ctrl+c` binding. Do not "fix" this with
+  `TEXTUAL_ALLOW_SIGNALS`.
+- **Textual gotchas (both verified here)**: `Vertical`/`Horizontal` default to
+  `height: 1fr` with `overflow: hidden`, so a content-sized wrapper MUST declare
+  `height: auto` or it gets squeezed and clips its children. Percentage
+  `max-height` resolves against an auto-height parent, so cards go in
+  `CenterMiddle`, not `Center`. Textual also focuses the first `Input` before
+  the first layout pass, so `scroll_visible` leaves a phantom scroll — re-anchor
+  with `call_after_refresh(... scroll_to, y=0)`.
+- **Never `query_one` a widget from `compose()`** — children are not mounted
+  yet, so it raises `NoMatches`. Pass the value through the call instead (this
+  is what broke `DeployScreen`).
+- **Provider display names** come from `get_provider_display_name()` in
+  `providers/base.py`. Never chain comparisons on the enum value
+  (`"AWS" if ... else "OCI"` silently labels GCP as OCI).
 - **Remote server configuration is Paramiko SSH/SFTP** (no Ansible, no
   Jinja2): `wireguard/remote_server.py` uploads
   `scripts/wireguard-server-install.sh` (a 687-line angristan installer —
