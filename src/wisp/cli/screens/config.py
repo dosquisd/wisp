@@ -17,6 +17,7 @@ from textual.widgets import (
 )
 
 from wisp.cli.screens.base import WispScreen
+from wisp.cli.screens.modal import ConfirmActionScreen, ConfirmDiscardScreen
 from wisp.config.settings import describe_config_sources, save_session_config
 
 
@@ -125,7 +126,22 @@ class ConfigScreen(WispScreen):
         text-align: center;
         height: 1;
     }
+
+    #dirty-marker {
+        color: #facc15;
+        text-align: center;
+        height: 1;
+    }
     """
+
+    def __init__(self) -> None:
+        """Start with no baseline and no pending navigation decision."""
+        super().__init__()
+        self._baseline: tuple[str, str, str, str, str, bool, str, str, str] | None = (
+            None
+        )
+        self._pending_action: str = ""
+        self._preserve_dirty: bool = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -139,6 +155,7 @@ class ConfigScreen(WispScreen):
                     classes="subtitle",
                 )
                 yield Static(describe_config_sources(), id="config-source-note")
+                yield Static("", id="dirty-marker")
 
                 with Vertical(id="form-container"):
                     yield Label("Timeout VM Boot (segundos para boot):")
@@ -354,13 +371,17 @@ class ConfigScreen(WispScreen):
                 _cred_line(
                     "Credentials Path",
                     creds.credentials_path,
-                    sensitive=False,
+                    sensitive=True,
                     revealed=revealed,
                 ),
             ]
         )
 
     def on_switch_changed(self, event: Switch.Changed) -> None:
+        # force-ip is part of the form, so any switch flip may change the
+        # dirty state; the reveal toggles are just below and independent.
+        self._refresh_dirty_state()
+
         if event.switch.id == "switch-reveal-aws":
             self.query_one("#aws-cred-text", Static).update(
                 self._aws_cred_text(revealed=event.value)
@@ -378,20 +399,42 @@ class ConfigScreen(WispScreen):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-save":
-            self.save_config()
+            self._request_save()
         elif event.button.id == "btn-reset":
-            self.reset_config()
+            self._request_reset()
         elif event.button.id == "btn-back":
             self.action_back()
 
-    def save_config(self) -> None:
-        """Validate the form and, if valid, persist it to ``AppState`` *and*
-        to the active ``wisp.toml`` (see :func:`save_session_config`).
+    def _request_save(self) -> None:
+        """Ask before persisting the form to ``wisp.toml``.
 
-        Shows an inline error and returns early if any field is invalid
-        (timeout < 5, port out of ``0-65535``, empty interface/DNS). Nothing
-        is written to disk until the whole form passes validation — changes
-        are staged in the widgets until this one confirm step.
+        Validation runs first so an invalid form never opens the modal — it
+        shows the inline error instead. Cancelling the modal keeps every
+        current edit (the dirty state must survive the modal closing).
+        """
+        if self._validate_form() is None:
+            return
+        self._preserve_dirty = self._is_dirty()
+        self.app.push_screen(
+            ConfirmActionScreen(
+                title="¿Guardar la configuración?",
+                body="Los cambios se aplicarán a la sesión y se escribirán\n"
+                "en el wisp.toml activo.",
+                confirm_label="Guardar",
+            ),
+            self._on_save_choice,
+        )
+
+    def _on_save_choice(self, confirmed: bool | None) -> None:
+        if confirmed:
+            self.save_config()
+
+    def _validate_form(self) -> tuple[int, int, str, str, str, bool] | None:
+        """Read the editable ``[general]`` fields and validate them.
+
+        Shows an inline error and returns ``None`` when any field is invalid
+        (timeout < 5, port out of ``0-65535``, empty interface/DNS); otherwise
+        the parsed ``(timeout, port, interface, dns1, dns2, force_ip)``.
         """
         timeout_raw = self.query_one("#input-vm-boot-timeout", Input).value.strip()
         port_raw = self.query_one("#input-wireguard-port", Input).value.strip()
@@ -399,9 +442,6 @@ class ConfigScreen(WispScreen):
         dns1 = self.query_one("#input-dns1", Input).value.strip()
         dns2 = self.query_one("#input-dns2", Input).value.strip()
         force_ip = self.query_one("#switch-force-ip", Switch).value
-        aws_region = self.query_one("#input-aws-region", Input).value.strip()
-        oci_region = self.query_one("#input-oci-region", Input).value.strip()
-        gcp_region = self.query_one("#input-gcp-region", Input).value.strip()
 
         error_label = self.query_one("#error-message", Static)
 
@@ -409,27 +449,47 @@ class ConfigScreen(WispScreen):
             timeout_val = int(timeout_raw)
             if timeout_val < 5:
                 error_label.update("[!] El timeout debe ser de al menos 5 segundos.")
-                return
+                return None
         except ValueError:
             error_label.update("[!] El timeout debe ser un número entero.")
-            return
+            return None
 
         try:
             port_val = int(port_raw)
             if port_val < 0 or port_val > 65535:
                 error_label.update("[!] El puerto debe estar entre 0 y 65535.")
-                return
+                return None
         except ValueError:
             error_label.update("[!] El puerto debe ser un número entero.")
-            return
+            return None
 
         if not interface:
             error_label.update("[!] La interfaz WireGuard no puede estar vacía.")
-            return
+            return None
 
         if not dns1 or not dns2:
             error_label.update("[!] Los servidores DNS no pueden estar vacíos.")
+            return None
+
+        return (timeout_val, port_val, interface, dns1, dns2, force_ip)
+
+    def save_config(self) -> None:
+        """Validate the form and, if valid, persist it to ``AppState`` *and*
+        to the active ``wisp.toml`` (see :func:`save_session_config`).
+
+        Reached normally as the confirmed step after :meth:`_request_save`'s
+        modal, but also called directly (e.g. the discard modal's "Guardar"),
+        so it re-validates here — an invalid form never reaches the disk, it
+        just bounces with an inline error.
+        """
+        validated = self._validate_form()
+        if validated is None:
             return
+        timeout_val, port_val, interface, dns1, dns2, force_ip = validated
+
+        aws_region = self.query_one("#input-aws-region", Input).value.strip()
+        oci_region = self.query_one("#input-oci-region", Input).value.strip()
+        gcp_region = self.query_one("#input-gcp-region", Input).value.strip()
 
         # Update in-memory state
         state = self.app.state
@@ -443,6 +503,7 @@ class ConfigScreen(WispScreen):
         # Persist to disk: [general] fully, plus just the `region` key of
         # [aws]/[oci]/[gcp] — everything else in those sections (credentials,
         # profile, etc.) is left untouched, since this form never edits them.
+        error_label = self.query_one("#error-message", Static)
         try:
             target_path = save_session_config(
                 state.config,
@@ -526,7 +587,23 @@ class ConfigScreen(WispScreen):
         self.query_one("#error-message", Static).update("")
         self.notify("Configuración restablecida desde wisp.toml", severity="warning")
 
+        # The form now mirrors the reloaded state again, so it is the clean
+        # baseline for any further edit.
+        self._baseline = self._form_values()
+        self._refresh_dirty_state()
+
     def on_screen_resume(self) -> None:
+        # The screen just became current. Normally that means a fresh visit, so
+        # whatever the widgets show is the saved/loaded truth — snapshot it as
+        # the clean baseline. The one exception is returning from the discard
+        # modal after cancel: the edits were explicitly kept, so re-snapshotting
+        # here would silently mark them as clean.
+        if self._preserve_dirty:
+            self._preserve_dirty = False
+        else:
+            self._baseline = self._form_values()
+            self._refresh_dirty_state()
+
         # Textual focuses the first Input before the first layout pass, so
         # the scroll_visible() it triggers computes against pre-layout
         # dimensions and leaves the card scrolled even when the input was
@@ -534,5 +611,86 @@ class ConfigScreen(WispScreen):
         # once the layout settles.
         self.call_after_refresh(self.query_one(".card").scroll_to, y=0, animate=False)
 
+    def _form_values(self) -> tuple[str, str, str, str, str, bool, str, str, str]:
+        """Snapshot the editable form: the six [general] fields and the three
+        per-provider region inputs. The reveal switches are deliberately
+        excluded — flipping them is not a config change."""
+        return (
+            self.query_one("#input-vm-boot-timeout", Input).value.strip(),
+            self.query_one("#input-wireguard-port", Input).value.strip(),
+            self.query_one("#input-wireguard-interface", Input).value.strip(),
+            self.query_one("#input-dns1", Input).value.strip(),
+            self.query_one("#input-dns2", Input).value.strip(),
+            self.query_one("#switch-force-ip", Switch).value,
+            self.query_one("#input-aws-region", Input).value.strip(),
+            self.query_one("#input-oci-region", Input).value.strip(),
+            self.query_one("#input-gcp-region", Input).value.strip(),
+        )
+
+    def _is_dirty(self) -> bool:
+        """True when the form differs from its mount snapshot (unsaved edits)."""
+        return self._baseline is not None and self._form_values() != self._baseline
+
+    def _refresh_dirty_state(self) -> None:
+        """Show/hide the 'unsaved changes' marker to match reality."""
+        marker = self.query_one("#dirty-marker", Static)
+        if self._is_dirty():
+            marker.update("[yellow]●[/yellow] Hay cambios sin guardar")
+        else:
+            marker.update("")
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        self._refresh_dirty_state()
+
+    def _confirm_unsaved(self, *, action: str) -> None:
+        """Guard a destructive navigation while there are unsaved edits.
+
+        ``action`` is ``"back"`` or ``"reset"``; the modal's decision is
+        handled by :meth:`_handle_unsaved_choice`. The dirty edits must survive
+        a Cancel, so :meth:`on_screen_resume` is told not to re-snapshot the
+        baseline when the modal pops.
+        """
+        self._pending_action = action
+        self._preserve_dirty = True
+        self.app.push_screen(ConfirmDiscardScreen(), self._handle_unsaved_choice)
+
+    def _handle_unsaved_choice(self, result: str | None) -> None:
+        """Apply the modal's ``save``/``discard``/``None`` (cancel) verdict."""
+        if result == "save":
+            # The modal already popped itself when dismissing; save_config()
+            # pops the config screen now that it is current again.
+            self.save_config()
+            return
+        if result == "discard":
+            self.reset_config()
+            if self._pending_action == "back":
+                self.app.pop_screen()
+            return
+        self._refresh_dirty_state()
+
+    def _request_reset(self) -> None:
+        """Restablecer always confirms. With unsaved edits the existing
+        discard modal asks first (save/discard/cancel); when clean, a direct
+        confirm modal guards the reload from ``wisp.toml``."""
+        if self._is_dirty():
+            self._confirm_unsaved(action="reset")
+            return
+        self.app.push_screen(
+            ConfirmActionScreen(
+                title="¿Restablecer la configuración?",
+                body="Se descartará cualquier edición y el formulario se\n"
+                "recargará desde wisp.toml.",
+                confirm_label="Restablecer",
+            ),
+            self._on_reset_choice,
+        )
+
+    def _on_reset_choice(self, confirmed: bool | None) -> None:
+        if confirmed:
+            self.reset_config()
+
     def action_back(self) -> None:
-        self.app.pop_screen()
+        if self._is_dirty():
+            self._confirm_unsaved(action="back")
+        else:
+            self.app.pop_screen()
