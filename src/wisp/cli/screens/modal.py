@@ -14,7 +14,7 @@ Two questions, both modal (they dim the screen below) and both resolved through
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Center, Horizontal, Vertical
+from textual.containers import Center, CenterMiddle, Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Label, Static, Switch
 
@@ -44,6 +44,9 @@ class _ConfirmModal(ModalScreen):
     CSS = """
     .modal-card {
         width: 62;
+        height: auto;
+        max-height: 100%;
+        overflow-y: auto;
         background: #0b0f19;
         border: thick #334155;
         padding: 1 2;
@@ -106,7 +109,7 @@ class ConfirmActionScreen(_ConfirmModal):
     def compose(self) -> ComposeResult:
         confirm_variant = "error" if self._danger else "primary"
         confirm_classes = "btn-danger" if self._danger else "btn-primary"
-        with Center():
+        with CenterMiddle():
             with Vertical(classes="modal-card"):
                 yield Static(self._title, classes="modal-title")
                 yield Static(self._body, classes="modal-body")
@@ -140,7 +143,7 @@ class ConfirmDiscardScreen(_ConfirmModal):
     ]
 
     def compose(self) -> ComposeResult:
-        with Center():
+        with CenterMiddle():
             with Vertical(classes="modal-card"):
                 yield Static(
                     "Cambios sin guardar",
@@ -195,7 +198,7 @@ class ConfirmDestroyScreen(_ConfirmModal):
     ]
 
     def compose(self) -> ComposeResult:
-        with Center():
+        with CenterMiddle():
             with Vertical(classes="modal-card"):
                 yield Static(
                     "¿Destruir la VPN activa?",

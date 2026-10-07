@@ -8,6 +8,16 @@ must fit the smallest realistic terminal.
 """
 
 
+def _assert_vertically_centered(widget) -> None:
+    parent_region = widget.parent.region
+    parent_center = parent_region.y + parent_region.height / 2
+    widget_center = widget.region.y + widget.region.height / 2
+    assert abs(widget_center - parent_center) <= 1, (
+        f"widget is not vertically centered: "
+        f"widget={widget_center:.1f} parent={parent_center:.1f}"
+    )
+
+
 async def test_deploy_card_fits_a_24_row_terminal(wisp_app):
     """The deploy card must not overflow, so the buttons are never clipped."""
     async with wisp_app.run_test(size=(100, 24)) as pilot:
@@ -20,6 +30,32 @@ async def test_deploy_card_fits_a_24_row_terminal(wisp_app):
             "deploy card overflows: "
             f"virtual={card.virtual_size.height} container={card.container_size.height}"
         )
+
+
+async def test_deploy_card_is_content_sized_and_centered(wisp_app):
+    """The deploy card should not stretch through the available terminal height."""
+    async with wisp_app.run_test(size=(100, 45)) as pilot:
+        await pilot.pause()
+        wisp_app.push_screen("deploy")
+        await pilot.pause()
+
+        card = wisp_app.screen.query_one("#deploy-card")
+        assert card.region.height < card.parent.region.height
+        _assert_vertically_centered(card)
+
+
+async def test_confirm_discard_modal_is_content_sized_and_centered(wisp_app):
+    """The shared modal card should stay compact and centered."""
+    from wisp.cli.screens.modal import ConfirmDiscardScreen
+
+    async with wisp_app.run_test(size=(100, 45)) as pilot:
+        await pilot.pause()
+        wisp_app.push_screen(ConfirmDiscardScreen())
+        await pilot.pause()
+
+        card = wisp_app.screen.query_one(".modal-card")
+        assert card.region.height < card.parent.region.height
+        _assert_vertically_centered(card)
 
 
 async def test_progress_card_fits_even_with_error(wisp_app):
@@ -60,3 +96,26 @@ async def test_progress_bar_is_centered(wisp_app):
         assert abs(bar_center - expected) <= 1, (
             f"progress bar off-centre by {bar_center - expected:+.1f} cols"
         )
+
+
+async def test_shutdown_progress_bar_is_centered_and_fits(wisp_app):
+    """The shutdown ProgressBar should stay centered within the card content."""
+    from wisp.cli.screens.shutdown import ShutdownScreen
+
+    async with wisp_app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        ShutdownScreen.start_teardown = lambda self: None  # type: ignore[method-assign]
+        screen = ShutdownScreen(exit_after=False)
+        wisp_app.push_screen(screen)
+        await pilot.pause()
+
+        card = screen.query_one(".card")
+        bar = screen.query_one("#shutdown-progress")
+        card_left = card.content_region.x
+        card_width = card.content_region.width
+        bar_center = bar.region.x + bar.region.width / 2
+        expected = card_left + card_width / 2
+        assert abs(bar_center - expected) <= 1, (
+            f"shutdown progress bar off-centre by {bar_center - expected:+.1f} cols"
+        )
+        assert bar.region.width < card_width

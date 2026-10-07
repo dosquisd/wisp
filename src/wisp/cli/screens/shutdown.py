@@ -18,7 +18,7 @@ It serves two flows:
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import CenterMiddle, Vertical
+from textual.containers import Center, CenterMiddle, Vertical
 from textual.widgets import Footer, Header, ProgressBar, Static
 
 from wisp.cli.screens.base import WispScreen
@@ -59,6 +59,15 @@ class ShutdownScreen(WispScreen):
         text-align: center;
         color: #64748b;
         margin-top: 0;
+    }
+
+    #shutdown-progress-center {
+        width: 100%;
+    }
+
+    #shutdown-progress {
+        width: 50;
+        max-width: 100%;
     }
     """
 
@@ -110,7 +119,10 @@ class ShutdownScreen(WispScreen):
                     id="shutdown-subtitle",
                     classes="subtitle",
                 )
-                yield ProgressBar(id="shutdown-progress", total=100, show_eta=False)
+                with Center(id="shutdown-progress-center"):
+                    yield ProgressBar(
+                        id="shutdown-progress", total=100, show_eta=False
+                    )
                 yield Static("Iniciando teardown...", id="shutdown-status")
                 yield Static(
                     "Volverás al menú al terminar."

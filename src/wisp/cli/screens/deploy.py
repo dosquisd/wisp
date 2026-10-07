@@ -3,7 +3,7 @@
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Center, Horizontal, Vertical
+from textual.containers import CenterMiddle, Horizontal, Vertical
 from textual.widgets import Button, Footer, Header, Label, Select, Static
 
 from wisp.cli.screens.base import WispScreen
@@ -69,6 +69,7 @@ class DeployScreen(WispScreen):
        the whole card at 18 rows (it was 31). */
     #deploy-card {
         padding: 0 2;
+        height: auto;
     }
 
     #deploy-card .title {
@@ -94,7 +95,7 @@ class DeployScreen(WispScreen):
     #deploy-summary {
         background: #0b0f19;
         border: solid #334155;
-        padding: 0 1;
+        padding: 0;
         height: auto;
     }
 
@@ -102,11 +103,15 @@ class DeployScreen(WispScreen):
         margin-right: 1;
         width: 1fr;
     }
+
+    .btn-group {
+        height: auto;
+    }
     """
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        with Center():
+        with CenterMiddle():
             with Vertical(classes="card", id="deploy-card"):
                 yield Static(
                     "[bold cyan]Asistente de Despliegue[/bold cyan]", classes="title"
