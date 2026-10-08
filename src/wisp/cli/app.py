@@ -114,7 +114,7 @@ class WispApp(App):
         background: #b91c1c;
     }
 
-    Input:focus, Select:focus, Switch:focus {
+    Input:focus, Switch:focus {
         border: tall #38bdf8;
     }
 

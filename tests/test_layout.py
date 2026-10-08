@@ -44,6 +44,28 @@ async def test_deploy_card_is_content_sized_and_centered(wisp_app):
         _assert_vertically_centered(card)
 
 
+async def test_deploy_card_height_is_stable_when_selects_focus(wisp_app, monkeypatch):
+    """Focusing either Select must not resize the deployment card."""
+    from wisp.cli.screens.deploy import DeployScreen
+
+    monkeypatch.setattr(DeployScreen, "fetch_live_regions", lambda self: None)
+    async with wisp_app.run_test(size=(100, 45)) as pilot:
+        await pilot.pause()
+        wisp_app.push_screen("deploy")
+        await pilot.pause()
+
+        card = wisp_app.screen.query_one("#deploy-card")
+        initial_height = card.region.height
+
+        await pilot.click("#select-provider")
+        await pilot.pause()
+        assert card.region.height == initial_height
+
+        await pilot.click("#select-region")
+        await pilot.pause()
+        assert card.region.height == initial_height
+
+
 async def test_confirm_discard_modal_is_content_sized_and_centered(wisp_app):
     """The shared modal card should stay compact and centered."""
     from wisp.cli.screens.modal import ConfirmDiscardScreen
