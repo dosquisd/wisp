@@ -22,6 +22,7 @@ from textual.containers import Center, CenterMiddle, Vertical
 from textual.widgets import Footer, Header, ProgressBar, Static
 
 from wisp.cli.screens.base import WispScreen
+from wisp.config.settings import save_session_config
 from wisp.session import ActiveSession, teardown_active_session
 from wisp.utils import logger
 
@@ -120,9 +121,7 @@ class ShutdownScreen(WispScreen):
                     classes="subtitle",
                 )
                 with Center(id="shutdown-progress-center"):
-                    yield ProgressBar(
-                        id="shutdown-progress", total=100, show_eta=False
-                    )
+                    yield ProgressBar(id="shutdown-progress", total=100, show_eta=False)
                 yield Static("Iniciando teardown...", id="shutdown-status")
                 yield Static(
                     "Volverás al menú al terminar."
@@ -272,3 +271,35 @@ def request_shutdown(app, reason: str) -> None:
         # the resources are still released even if the user sees nothing.
         logger.error(f"Could not show the shutdown screen ({exc}); exiting anyway")
         app.exit()
+
+
+def confirmed_destroy(app, choice: tuple[bool, bool] | None, reason: str) -> bool:
+    """Honour a :class:`ConfirmDestroyScreen` verdict.
+
+    Applies the "no volver a preguntar" switch by persisting
+    ``[general].confirm_destroy = false``, then routes the teardown through
+    :func:`request_shutdown` so every destroy trigger shares the same guard.
+
+    Args:
+        app: The running :class:`~wisp.cli.app.WispApp`.
+        choice: The modal's result, ``(confirmed, no_ask)`` or ``None``.
+        reason (str): Reason forwarded to ``request_shutdown``.
+
+    Returns:
+        bool: True when the destroy was confirmed and started; False when the
+            user backed out.
+    """
+    if choice is None or not choice[0]:
+        return False
+
+    _, no_ask = choice
+    if no_ask:
+        state = app.state
+        state.config.confirm_destroy = False
+        try:
+            save_session_config(state.config)
+        except Exception as exc:
+            logger.warning(f"Could not persist confirm_destroy: {exc}")
+
+    request_shutdown(app, reason)
+    return True

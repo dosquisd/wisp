@@ -20,10 +20,24 @@ async def _open_tunnel(pilot, app) -> None:
 
 
 def _stub_shutdown(monkeypatch):
+    """Capture request_shutdown calls from both call sites.
+
+    ``confirmed_destroy`` (the confirmed path) and the direct escape-hatch in
+    the tunnel screen bind the same function under two module names, so both
+    are patched to collect into one list.
+    """
     calls = []
+
+    def helper(app, reason) -> None:
+        calls.append((app, reason))
+
+    monkeypatch.setattr(
+        "wisp.cli.screens.shutdown.request_shutdown",
+        helper,
+    )
     monkeypatch.setattr(
         "wisp.cli.screens.tunnel.request_shutdown",
-        lambda app, reason: calls.append((app, reason)),
+        helper,
     )
     return calls
 
@@ -31,7 +45,7 @@ def _stub_shutdown(monkeypatch):
 def _stub_save(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        "wisp.cli.screens.tunnel.save_session_config",
+        "wisp.cli.screens.shutdown.save_session_config",
         lambda *a, **k: calls.append(a),
     )
     return calls
@@ -109,3 +123,89 @@ async def test_destroy_skips_modal_when_disabled(wisp_app, monkeypatch):
 
         assert len(calls) == 1
         assert not isinstance(wisp_app.screen, ConfirmDestroyScreen)
+
+
+def _arm_guard(app) -> None:
+    app.state.session_guard.arm(lambda reason: None)
+
+
+def _stub_app_request_shutdown(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "wisp.cli.app.request_shutdown",
+        lambda app, reason: calls.append((app, reason)),
+    )
+    return calls
+
+
+def _stub_real_request_shutdown(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "wisp.cli.screens.shutdown.request_shutdown",
+        lambda app, reason: calls.append((app, reason)),
+    )
+    return calls
+
+
+async def test_quit_asks_when_tunnel_live(wisp_app):
+    async with wisp_app.run_test(size=(100, 40)) as pilot:
+        await _open_tunnel(pilot, wisp_app)
+        _arm_guard(wisp_app)
+
+        await pilot.press("q")
+        await pilot.pause()
+
+        assert isinstance(wisp_app.screen, ConfirmDestroyScreen)
+
+        await pilot.click("#btn-destroy-no")
+        await pilot.pause()
+        assert type(wisp_app.screen) is TunnelScreen
+        assert wisp_app.state.session_guard.armed
+
+
+async def test_quit_confirmed_starts_teardown_with_reason(wisp_app, monkeypatch):
+    calls = _stub_real_request_shutdown(monkeypatch)
+    async with wisp_app.run_test(size=(100, 40)) as pilot:
+        await _open_tunnel(pilot, wisp_app)
+        _arm_guard(wisp_app)
+
+        await pilot.press("q")
+        await pilot.pause()
+        await pilot.click("#btn-destroy-yes")
+        await pilot.pause()
+
+        assert len(calls) == 1
+        assert "on quit" in calls[0][1]
+
+
+async def test_quit_skips_modal_when_nothing_live(wisp_app, monkeypatch):
+    calls = _stub_app_request_shutdown(monkeypatch)
+    async with wisp_app.run_test(size=(100, 40)) as pilot:
+        await _open_tunnel(pilot, wisp_app)
+        assert not wisp_app.state.session_guard.armed
+
+        await pilot.press("q")
+        await pilot.pause()
+
+        assert len(calls) == 1
+        assert not isinstance(wisp_app.screen, ConfirmDestroyScreen)
+
+
+async def test_quit_does_not_stack_a_second_modal(wisp_app):
+    async with wisp_app.run_test(size=(100, 40)) as pilot:
+        await _open_tunnel(pilot, wisp_app)
+        _arm_guard(wisp_app)
+
+        await pilot.press("q")
+        await pilot.pause()
+        assert isinstance(wisp_app.screen, ConfirmDestroyScreen)
+
+        await pilot.press("q")
+        await pilot.pause()
+        await pilot.press("q")
+        await pilot.pause()
+        assert isinstance(wisp_app.screen, ConfirmDestroyScreen)
+
+        await pilot.click("#btn-destroy-no")
+        await pilot.pause()
+        assert type(wisp_app.screen) is TunnelScreen

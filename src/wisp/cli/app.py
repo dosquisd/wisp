@@ -4,7 +4,8 @@ from textual.app import App
 from textual.binding import Binding
 
 from wisp.cli.screens import ConfigScreen, DeployScreen, MainMenuScreen
-from wisp.cli.screens.shutdown import request_shutdown
+from wisp.cli.screens.modal import ConfirmDestroyScreen
+from wisp.cli.screens.shutdown import confirmed_destroy, request_shutdown
 from wisp.cli.state import AppState
 from wisp.session import (
     find_orphaned_session,
@@ -182,11 +183,29 @@ class WispApp(App):
         register_atexit(self.state.session_guard)
 
     def action_quit(self) -> None:
-        """Tear down any active session, then exit.
+        """Quit, destroying any live tunnel — asking first, unless disabled.
 
-        Reached by both ``q`` and ``Ctrl+C`` from every screen.
+        Reached by both ``q`` and ``Ctrl+C`` from every screen. When a tunnel is
+        up the session guard is armed and quitting destroys it, which is
+        irreversible, so the same ``ConfirmDestroyScreen`` as the destroy button
+        asks first (honouring ``[general] confirm_destroy``). Elsewhere there is
+        nothing live and the app quits straight away.
         """
-        request_shutdown(self, "quit requested")
+        state = self.state
+        if isinstance(self.screen, ConfirmDestroyScreen):
+            return
+        if state.session_guard.armed and state.config.confirm_destroy:
+            self.push_screen(ConfirmDestroyScreen(), self._on_quit_destroy_choice)
+        else:
+            request_shutdown(self, "quit requested")
+
+    def _on_quit_destroy_choice(self, choice: tuple[bool, bool] | None) -> None:
+        """Apply the destroy modal's verdict when quitting with a live session."""
+        confirmed_destroy(
+            self,
+            choice,
+            "tunnel destroyed on quit",
+        )
 
     def _offer_orphan_cleanup(self) -> None:
         """Offer to clean up a session left behind by a previous run.

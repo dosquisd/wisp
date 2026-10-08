@@ -169,5 +169,7 @@ The tunnel view is a terminal state: `q`, `Ctrl+C`, `esc`, `d`, and the
 *Destruir Túnel y Salir* button all tear the VPN down and exit — there is
 deliberately no way back to the menu with a live session (a tunnel nobody
 watches is a VM nobody tears down). Because that destroy is irreversible, a
-confirmation modal asks first unless `[general].confirm_destroy` is `false`;
-the dialog's "No volver a preguntar" checkbox turns that off and persists it.
+*Confirmation* modal asks first unless `[general].confirm_destroy` is `false`
+— `q` and `Ctrl+C` ask too when a tunnel is live, while on every other screen
+they quit straight away. The dialog's "No volver a preguntar" checkbox turns
+that off and persists it.

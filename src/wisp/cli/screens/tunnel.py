@@ -25,8 +25,7 @@ from textual.widgets import Button, Footer, Header, Static
 
 from wisp.cli.screens.base import WispScreen
 from wisp.cli.screens.modal import ConfirmDestroyScreen
-from wisp.cli.screens.shutdown import request_shutdown
-from wisp.config.settings import save_session_config
+from wisp.cli.screens.shutdown import confirmed_destroy, request_shutdown
 from wisp.providers.base import get_provider_display_name
 from wisp.session import read_active_session
 from wisp.utils import logger
@@ -238,19 +237,8 @@ class TunnelScreen(WispScreen):
 
     def _handle_destroy_choice(self, choice: tuple[bool, bool] | None) -> None:
         """Apply the destroy modal's verdict: proceed, and maybe stop asking."""
-        if choice is None or not choice[0]:
-            return
-
-        # The switch asks to stop confirming; persist it so the preference
-        # survives restarts (save_session_config only touches [general], keeping
-        # every other section — and the secrets — intact).
-        _, no_ask = choice
-        if no_ask:
-            state = self.app.state  # type: ignore[attr-defined]
-            state.config.confirm_destroy = False
-            try:
-                save_session_config(state.config)
-            except Exception as exc:
-                logger.warning(f"Could not persist confirm_destroy: {exc}")
-
-        request_shutdown(self.app, "tunnel destroyed from the tunnel screen")
+        confirmed_destroy(
+            self.app,
+            choice,
+            "tunnel destroyed from the tunnel screen",
+        )

@@ -69,8 +69,10 @@ class _ConfirmModal(ModalScreen):
     }
 
     .modal-option {
-        height: 1;
+        height: auto;
+        min-height: 3;
         margin-bottom: 1;
+        align: center middle;
     }
 
     .modal-option Label {

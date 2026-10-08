@@ -14,9 +14,17 @@ def _stub_deploy(monkeypatch) -> None:
 
 def _stub_shutdown(monkeypatch):
     calls = []
+
+    def helper(app, reason) -> None:
+        calls.append((app, reason))
+
+    monkeypatch.setattr(
+        "wisp.cli.screens.shutdown.request_shutdown",
+        helper,
+    )
     monkeypatch.setattr(
         "wisp.cli.screens.progress.request_shutdown",
-        lambda app, reason: calls.append((app, reason)),
+        helper,
     )
     return calls
 

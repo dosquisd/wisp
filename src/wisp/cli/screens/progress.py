@@ -8,13 +8,11 @@ from textual.widgets import Button, Footer, Header, ProgressBar, Static
 
 from wisp.cli.screens.base import WispScreen
 from wisp.cli.screens.modal import ConfirmDestroyScreen
-from wisp.cli.screens.shutdown import request_shutdown
+from wisp.cli.screens.shutdown import confirmed_destroy, request_shutdown
 from wisp.cli.screens.tunnel import TunnelScreen
-from wisp.config.settings import save_session_config
 from wisp.providers import PROVIDERS_MAP, ProviderEnum
 from wisp.providers.base import DeployVMResult, get_provider_display_name
 from wisp.session import teardown_active_session, write_active_session
-from wisp.utils import logger
 
 
 class ProgressScreen(WispScreen):
@@ -302,19 +300,11 @@ class ProgressScreen(WispScreen):
 
     def _on_destroy_choice(self, choice: tuple[bool, bool] | None) -> None:
         """Apply the destroy modal's verdict from the results view."""
-        if choice is None or not choice[0]:
-            return
-
-        _, no_ask = choice
-        if no_ask:
-            state = self.app.state  # type: ignore[attr-defined]
-            state.config.confirm_destroy = False
-            try:
-                save_session_config(state.config)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(f"Could not persist confirm_destroy: {exc}")
-
-        request_shutdown(self.app, "destroy confirmed from the progress screen")
+        confirmed_destroy(
+            self.app,
+            choice,
+            "destroy confirmed from the progress screen",
+        )
 
     def action_back(self) -> None:
         """Leave the progress screen, only when nothing is in flight.
