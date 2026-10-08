@@ -126,3 +126,21 @@ async def test_shutdown_progress_bar_is_centered_and_fits(wisp_app):
             f"shutdown progress bar off-centre by {bar_center - expected:+.1f} cols"
         )
         assert bar.region.width < card_width
+
+
+async def test_shutdown_returns_to_main_menu(wisp_app):
+    """Completed teardown should return to the menu instead of exiting the app."""
+    from wisp.cli.screens import MainMenuScreen
+    from wisp.cli.screens.shutdown import ShutdownScreen
+
+    async with wisp_app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        ShutdownScreen.start_teardown = lambda self: None  # type: ignore[method-assign]
+        screen = ShutdownScreen()
+        wisp_app.push_screen(screen)
+        await pilot.pause()
+
+        screen._exit_now()
+        await pilot.pause()
+
+        assert isinstance(wisp_app.screen, MainMenuScreen)

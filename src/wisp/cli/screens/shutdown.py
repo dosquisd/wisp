@@ -75,17 +75,15 @@ class ShutdownScreen(WispScreen):
         self,
         reason: str = "requested",
         *,
-        exit_after: bool = True,
+        exit_after: bool = False,
         orphan: ActiveSession | None = None,
     ) -> None:
         """Initialize the screen.
 
         Args:
             reason (str): Short explanation of why the shutdown was requested.
-            exit_after (bool): Exit the app once the teardown finishes. Set to
-                False to return to the previous screen instead, which is what
-                the orphan cleanup needs: it repairs the leftovers of a *dead*
-                run, so there is no session in this process to tear down.
+            exit_after (bool): Exit the app once the teardown finishes. The
+                normal destroy flow returns to the main menu instead.
             orphan (ActiveSession | None): Marker of the abandoned session to
                 clean up. When given, the teardown targets those resources
                 directly instead of this process's session guard.
@@ -244,17 +242,15 @@ class ShutdownScreen(WispScreen):
         self.set_timer(1.2, self._exit_now)
 
     def _exit_now(self) -> None:
-        """Close out: exit the app, or return to the previous screen."""
+        """Close out: exit the app, or return to the main menu."""
         if self._exit_after:
             self.app.exit()
             return
-        # Orphan cleanup repairs a dead run's leftovers; the menu is still
-        # live and should be shown again with the orphan row now gone.
-        self.app.pop_screen()
+        self.app.switch_screen("main_menu")
 
 
 def request_shutdown(app, reason: str) -> None:
-    """Ask the app to tear down any active session and exit.
+    """Ask the app to tear down any active session and return to the menu.
 
     Safe to call from any screen and from any thread: it only pushes the
     shutdown screen, which owns the actual teardown.
