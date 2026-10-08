@@ -64,7 +64,7 @@ class ProgressScreen(WispScreen):
     }
 
     #progress-bar {
-        width: 50;
+        width: auto;
     }
     """
 

@@ -97,6 +97,13 @@ async def test_progress_bar_is_centered(wisp_app):
             f"progress bar off-centre by {bar_center - expected:+.1f} cols"
         )
 
+        visual_left = bar.query_one("#bar").region.x
+        visual_right = bar.query_one("#percentage").region.right
+        visual_center = (visual_left + visual_right) / 2
+        assert abs(visual_center - expected) <= 1, (
+            f"progress contents off-centre by {visual_center - expected:+.1f} cols"
+        )
+
 
 async def test_shutdown_progress_bar_is_centered_and_fits(wisp_app):
     """The shutdown ProgressBar should stay centered within the card content."""
