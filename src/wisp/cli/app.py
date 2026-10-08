@@ -5,7 +5,7 @@ from textual.binding import Binding
 
 from wisp.cli.screens import ConfigScreen, DeployScreen, MainMenuScreen
 from wisp.cli.screens.modal import ConfirmDestroyScreen
-from wisp.cli.screens.shutdown import confirmed_destroy, request_shutdown
+from wisp.cli.screens.shutdown import confirmed_destroy
 from wisp.cli.state import AppState
 from wisp.session import (
     find_orphaned_session,
@@ -197,7 +197,7 @@ class WispApp(App):
         if state.session_guard.armed and state.config.confirm_destroy:
             self.push_screen(ConfirmDestroyScreen(), self._on_quit_destroy_choice)
         else:
-            request_shutdown(self, "quit requested")
+            self.exit()
 
     def _on_quit_destroy_choice(self, choice: tuple[bool, bool] | None) -> None:
         """Apply the destroy modal's verdict when quitting with a live session."""

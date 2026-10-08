@@ -129,15 +129,6 @@ def _arm_guard(app) -> None:
     app.state.session_guard.arm(lambda reason: None)
 
 
-def _stub_app_request_shutdown(monkeypatch):
-    calls = []
-    monkeypatch.setattr(
-        "wisp.cli.app.request_shutdown",
-        lambda app, reason: calls.append((app, reason)),
-    )
-    return calls
-
-
 def _stub_real_request_shutdown(monkeypatch):
     calls = []
     monkeypatch.setattr(
@@ -178,8 +169,7 @@ async def test_quit_confirmed_starts_teardown_with_reason(wisp_app, monkeypatch)
         assert "on quit" in calls[0][1]
 
 
-async def test_quit_skips_modal_when_nothing_live(wisp_app, monkeypatch):
-    calls = _stub_app_request_shutdown(monkeypatch)
+async def test_quit_exits_without_teardown_when_nothing_live(wisp_app):
     async with wisp_app.run_test(size=(100, 40)) as pilot:
         await _open_tunnel(pilot, wisp_app)
         assert not wisp_app.state.session_guard.armed
@@ -187,8 +177,8 @@ async def test_quit_skips_modal_when_nothing_live(wisp_app, monkeypatch):
         await pilot.press("q")
         await pilot.pause()
 
-        assert len(calls) == 1
         assert not isinstance(wisp_app.screen, ConfirmDestroyScreen)
+        assert wisp_app.return_value is None
 
 
 async def test_quit_does_not_stack_a_second_modal(wisp_app):

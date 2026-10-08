@@ -6,7 +6,7 @@ from textual.containers import CenterMiddle, Vertical
 from textual.widgets import Button, Footer, Header, Static
 
 from wisp.cli.screens.base import WispScreen
-from wisp.cli.screens.shutdown import ShutdownScreen, request_shutdown
+from wisp.cli.screens.shutdown import ShutdownScreen
 from wisp.session import find_orphaned_session
 
 
@@ -225,11 +225,5 @@ class MainMenuScreen(WispScreen):
         self.app.push_screen("config")
 
     def action_quit(self) -> None:
-        """Destroy any active session, then exit.
-
-        Quitting with a tunnel up must not leave a VM running, so the session
-        guard is asked to tear it down first. Ephemeral VPNs make this the
-        right default: losing one costs a redeploy, leaking one costs money
-        until it is noticed.
-        """
-        request_shutdown(self.app, "quitted from the main menu")
+        """Use the app-level quit flow for keyboard and button exits."""
+        self.app.action_quit()

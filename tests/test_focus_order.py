@@ -50,6 +50,28 @@ async def test_hidden_orphan_button_is_not_focusable(wisp_app):
         assert button.can_focus is False
 
 
+async def test_main_menu_quit_button_exits_without_fake_teardown(wisp_app):
+    """The menu's quit button must use the direct inactive-session exit path."""
+    async with wisp_app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+
+        await pilot.click("#btn-quit")
+        await pilot.pause()
+
+        assert wisp_app.return_value is None
+
+
+async def test_main_menu_quit_key_exits_without_fake_teardown(wisp_app):
+    """The menu's ``3`` binding must not show a shutdown screen without a session."""
+    async with wisp_app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+
+        await pilot.press("3")
+        await pilot.pause()
+
+        assert wisp_app.return_value is None
+
+
 async def test_left_right_walk_a_horizontal_button_group(wisp_app):
     """Left/Right move within a button row, as Tab already does."""
     async with wisp_app.run_test(size=(100, 40)) as pilot:
