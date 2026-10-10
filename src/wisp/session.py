@@ -318,7 +318,7 @@ def teardown_active_session(
         if on_progress is not None:
             on_progress(message, progress)
 
-    report("Desconectando el túnel local...", 0.1)
+    report("Disconnecting the local tunnel...", 0.1)
     try:
         from wisp.wireguard import disconnect_wireguard_client
 
@@ -328,7 +328,7 @@ def teardown_active_session(
     except Exception as exc:
         logger.warning(f"Local tunnel teardown skipped: {exc}")
 
-    report("Destruyendo los recursos en la nube...", 0.4)
+    report("Destroying cloud resources...", 0.4)
     from wisp.providers import PROVIDERS_MAP, ProviderEnum
 
     provider_cls = PROVIDERS_MAP[ProviderEnum(provider_name)]

@@ -99,12 +99,12 @@ class TunnelScreen(WispScreen):
         with CenterMiddle():
             with Vertical(classes="card"):
                 yield Static(
-                    "[bold green]Túnel Activo[/bold green]",
+                    "[bold green]Active Tunnel[/bold green]",
                     id="tunnel-title",
                     classes="title",
                 )
                 yield Static(
-                    "El túnel permanece establecido mientras Wisp siga abierto.",
+                    "Tunnel remains active while Wisp is running.",
                     id="tunnel-subtitle",
                     classes="subtitle",
                 )
@@ -115,13 +115,13 @@ class TunnelScreen(WispScreen):
                     yield Static("", id="tunnel-uptime", classes="row")
                 yield Static("", id="tunnel-health")
                 yield Static(
-                    "q / Ctrl+C / esc destruyen el túnel y todos sus recursos.",
+                    "q / Ctrl+C / Esc destroy the tunnel and all resources.",
                     id="tunnel-note",
                     classes="subtitle",
                 )
                 with Horizontal(id="tunnel-buttons", classes="btn-group"):
                     yield Button(
-                        "Destruir Túnel y Salir",
+                        "Destroy Tunnel and Exit",
                         id="btn-tunnel-destroy",
                         variant="error",
                         classes="btn-danger",
@@ -158,7 +158,7 @@ class TunnelScreen(WispScreen):
 
         if deployment is None:
             self.query_one("#tunnel-session", Static).update(
-                "[yellow]Sin despliegue activo.[/yellow]"
+                "[yellow]No active deployment.[/yellow]"
             )
             self.query_one("#tunnel-endpoint", Static).update("")
             self.query_one("#tunnel-instance", Static).update("")
@@ -166,16 +166,16 @@ class TunnelScreen(WispScreen):
 
         provider_display = get_provider_display_name(state.provider_name)
         self.query_one("#tunnel-session", Static).update(
-            f"[dim]Proveedor:[/dim] {provider_display}"
-            f"   [dim]Región:[/dim] {state.selected_region}"
+            f"[dim]Provider:[/dim] {provider_display}"
+            f"   [dim]Region:[/dim] {state.selected_region}"
         )
         self.query_one("#tunnel-endpoint", Static).update(
-            f"[dim]IP Pública:[/dim] [bold yellow]{deployment['public_ip']}[/bold yellow]"
+            f"[dim]Public IP:[/dim] [bold yellow]{deployment['public_ip']}[/bold yellow]"
             f"   [dim]WireGuard:[/dim] UDP {deployment['wireguard_port']}"
         )
         self.query_one("#tunnel-instance", Static).update(
-            f"[dim]Instancia:[/dim] {deployment['instance_id']}"
-            f"   [dim]IP Privada:[/dim] {deployment['private_ip']}"
+            f"[dim]Instance:[/dim] {deployment['instance_id']}"
+            f"   [dim]Private IP:[/dim] {deployment['private_ip']}"
         )
         self._refresh_uptime()
 
@@ -189,7 +189,7 @@ class TunnelScreen(WispScreen):
         hours, remainder = divmod(int(elapsed), 3600)
         minutes, seconds = divmod(remainder, 60)
         self.query_one("#tunnel-uptime", Static).update(
-            f"[dim]Activo desde:[/dim] {hours:d}h {minutes:02d}m {seconds:02d}s"
+            f"[dim]Uptime:[/dim] {hours:d}h {minutes:02d}m {seconds:02d}s"
         )
 
     def _refresh_health(self) -> None:
@@ -201,18 +201,18 @@ class TunnelScreen(WispScreen):
         except Exception as exc:
             logger.debug(f"Tunnel health check failed: {exc}")
             self.query_one("#tunnel-health", Static).update(
-                "[yellow]Estado local: desconocido (daemon inaccesible)[/yellow]"
+                "[yellow]Local status: unknown (daemon unreachable)[/yellow]"
             )
             return
 
         if response.ok:
             self.query_one("#tunnel-health", Static).update(
-                f"[bold green]● Túnel establecido[/bold green]"
-                f" [dim]{response.message or 'wg0 activo'}[/dim]"
+                f"[bold green]● Tunnel established[/bold green]"
+                f" [dim]{response.message or 'wg0 active'}[/dim]"
             )
         else:
             self.query_one("#tunnel-health", Static).update(
-                "[bold yellow]● Interfaz local caída[/bold yellow]"
+                "[bold yellow]● Local interface down[/bold yellow]"
                 f" [dim]{response.message}[/dim]"
             )
 

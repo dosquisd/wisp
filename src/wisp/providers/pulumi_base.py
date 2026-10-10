@@ -94,8 +94,8 @@ class PulumiProvider(BaseProvider, ABC):
         pass
 
     def _get_progress_prefix(self, action: str) -> str:
-        """Get a localized progress message prefix."""
-        return f"{action} en {self._provider_name} con Pulumi..."
+        """Get a progress message prefix."""
+        return f"{action} in {self._provider_name} with Pulumi..."
 
     def deploy_vm(
         self,
@@ -119,7 +119,7 @@ class PulumiProvider(BaseProvider, ABC):
 
         if on_progress:
             on_progress(
-                self._get_progress_prefix("Aprovisionando infraestructura"), 0.05
+                self._get_progress_prefix("Provisioning infrastructure"), 0.05
             )
 
         logger.debug("Creating and deploying Pulumi stack...")
@@ -145,7 +145,7 @@ class PulumiProvider(BaseProvider, ABC):
                 time.sleep(1)
                 fraction = 0.25 + 0.50 * ((elapsed + 1) / timeout_seconds)
                 on_progress(
-                    f"Iniciando VM y servicios SSH ({elapsed + 1}/{timeout_seconds}s)...",
+                    f"Booting VM and SSH services ({elapsed + 1}/{timeout_seconds}s)...",
                     fraction,
                 )
         else:
@@ -167,7 +167,7 @@ class PulumiProvider(BaseProvider, ABC):
         )
 
         if on_progress:
-            on_progress("Configurando claves SSH...", 0.78)
+            on_progress("Configuring SSH keys...", 0.78)
 
         # Write the WireGuard/SSH private key
         WIREGUARD_KEYS_DIR.mkdir(parents=True, exist_ok=True)
@@ -201,7 +201,7 @@ class PulumiProvider(BaseProvider, ABC):
         )
 
         if on_progress:
-            on_progress("Instalando y configurando WireGuard vía SSH...", 0.85)
+            on_progress("Installing and configuring WireGuard over SSH...", 0.85)
 
         # Configure the remote WireGuard server and the local WireGuard client.
         # configure_remote_server streams its own granular progress (connect,
@@ -216,12 +216,12 @@ class PulumiProvider(BaseProvider, ABC):
             )
             if on_progress:
                 on_progress(
-                    "VM desplegada, pero el túnel local no pudo conectarse automáticamente.",
+                    "VM deployed, but the local tunnel could not connect automatically.",
                     1.0,
                 )
         else:
             if on_progress:
-                on_progress("¡VPN desplegada y activa!", 1.0)
+                on_progress("VPN deployed and active!", 1.0)
 
         return DeployVMResult(
             instance_id=instance_id,
@@ -240,7 +240,7 @@ class PulumiProvider(BaseProvider, ABC):
         logger.info(f"Deleting VM in region '{region}' ({self._provider_name})...")
 
         if on_progress:
-            on_progress("Desconectando el cliente WireGuard...", 0.1)
+            on_progress("Disconnecting WireGuard client...", 0.1)
         logger.debug("Disconnecting WireGuard client...")
         disconnect_response = disconnect_wireguard_client()
         if not disconnect_response.ok:
@@ -255,7 +255,7 @@ class PulumiProvider(BaseProvider, ABC):
         )  # type: ignore
 
         if on_progress:
-            on_progress("Destruyendo la infraestructura en el proveedor...", 0.4)
+            on_progress("Destroying provider infrastructure...", 0.4)
         logger.debug("Destroying Pulumi stack...")
         try:
             destroy_result = stack.destroy()
@@ -264,7 +264,7 @@ class PulumiProvider(BaseProvider, ABC):
             return 0
 
         if on_progress:
-            on_progress("Eliminando claves y configuración local...", 0.8)
+            on_progress("Removing local keys and configuration...", 0.8)
         # Remove the WireGuard related files if they exist
         logger.debug("Removing WireGuard related files...")
         if WIREGUARD_KEY_PATH.exists():

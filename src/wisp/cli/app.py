@@ -26,8 +26,8 @@ class WispApp(App):
     SUB_TITLE = "Ephemeral WireGuard VPNs on your own cloud"
 
     BINDINGS = [
-        Binding("q", "quit", "Salir", show=True),
-        Binding("ctrl+c", "quit", "Salir", show=False),
+        Binding("q", "quit", "Exit", show=True),
+        Binding("ctrl+c", "quit", "Exit", show=False),
     ]
 
     CSS = """
@@ -225,10 +225,10 @@ class WispApp(App):
         )
         try:
             self.notify(
-                f"Se encontró un túnel huérfano de {orphan.summary()}.\n"
-                "Sus recursos siguen facturando: límpialos con la opción "
-                "4 del menú principal.",
-                title="Sesión huérfana",
+                f"Orphaned tunnel found: {orphan.summary()}.\n"
+                "Cloud resources may still be incurring charges; clean them up "
+                "using option 4 in the main menu.",
+                title="Orphaned session",
                 severity="warning",
                 timeout=15,
             )

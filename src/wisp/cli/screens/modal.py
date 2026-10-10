@@ -9,7 +9,7 @@ Two questions, both modal (they dim the screen below) and both resolved through
 - :class:`ConfirmDestroyScreen` — whether to tear down the active VPN when the
   user tries to leave the tunnel view. Returns ``(confirmed, no_ask)``; the
   second flag becomes ``[general] confirm_destroy`` and is persisted by the
-  caller, so "no volver a preguntar" survives restarts.
+  caller, so "Don't ask again" survives restarts.
 """
 
 from textual.app import ComposeResult
@@ -29,10 +29,10 @@ class _ConfirmModal(ModalScreen):
     """
 
     BINDINGS = [
-        Binding("left", "focus_previous_widget", "Anterior", show=False),
-        Binding("right", "focus_next_widget", "Siguiente", show=False),
-        Binding("down", "focus_next_widget", "Siguiente", show=False),
-        Binding("up", "focus_previous_widget", "Anterior", show=False),
+        Binding("left", "focus_previous_widget", "Previous", show=False),
+        Binding("right", "focus_next_widget", "Next", show=False),
+        Binding("down", "focus_next_widget", "Next", show=False),
+        Binding("up", "focus_previous_widget", "Previous", show=False),
     ]
 
     def action_focus_next_widget(self) -> None:
@@ -85,13 +85,12 @@ class _ConfirmModal(ModalScreen):
 class ConfirmActionScreen(_ConfirmModal):
     """Generic yes/no modal for a labelled destructive-ish action.
 
-    Parameters drive the copy, so it can cover both "Guardar la configuración"
-    and "Restablecer la configuración". Resolves to ``True`` (confirmed) or
-    ``False``/``None`` (dismissed).
+    Parameters drive the copy, so it can cover actions like saving or resetting
+    settings. Resolves to ``True`` (confirmed) or ``False``/``None`` (dismissed).
     """
 
     BINDINGS = [
-        Binding("escape", "decline", "Cancelar", show=False),
+        Binding("escape", "decline", "Cancel", show=False),
     ]
 
     def __init__(
@@ -117,7 +116,7 @@ class ConfirmActionScreen(_ConfirmModal):
                 yield Static(self._body, classes="modal-body")
                 with Center(classes="modal-actions"):
                     yield Button(
-                        "Cancelar",
+                        "Cancel",
                         id="btn-action-no",
                         variant="default",
                         classes="btn-secondary",
@@ -148,31 +147,31 @@ class ConfirmDiscardScreen(_ConfirmModal):
         with CenterMiddle():
             with Vertical(classes="modal-card"):
                 yield Static(
-                    "Cambios sin guardar",
+                    "Unsaved changes",
                     id="confirm-discard-title",
                     classes="modal-title",
                 )
                 yield Static(
-                    "Hay modificaciones que aún no se aplican a wisp.toml.\n"
-                    "Si descartas ahora se perderán.",
+                    "There are unsaved changes that have not been written to wisp.toml.\n"
+                    "If you discard now, they will be lost.",
                     id="confirm-discard-body",
                     classes="modal-body",
                 )
                 with Center(classes="modal-actions"):
                     yield Button(
-                        "Guardar",
+                        "Save",
                         id="btn-discard-save",
                         variant="primary",
                         classes="btn-primary",
                     )
                     yield Button(
-                        "Descartar",
+                        "Discard",
                         id="btn-discard-drop",
                         variant="default",
                         classes="btn-secondary",
                     )
                     yield Button(
-                        "Cancelar",
+                        "Cancel",
                         id="btn-discard-cancel",
                         variant="default",
                         classes="btn-secondary",
@@ -196,35 +195,35 @@ class ConfirmDestroyScreen(_ConfirmModal):
     """Confirm tearing down the active VPN before leaving the tunnel view."""
 
     BINDINGS = [
-        Binding("escape", "decline", "Cancelar", show=False),
+        Binding("escape", "decline", "Cancel", show=False),
     ]
 
     def compose(self) -> ComposeResult:
         with CenterMiddle():
             with Vertical(classes="modal-card"):
                 yield Static(
-                    "¿Destruir la VPN activa?",
+                    "Destroy active VPN?",
                     id="confirm-destroy-title",
                     classes="modal-title",
                 )
                 yield Static(
-                    "Se eliminará la máquina virtual en la nube y se cerrará\n"
-                    "el túnel WireGuard. Dejarás de pagar por los recursos.",
+                    "The cloud VM will be deleted and the WireGuard tunnel closed.\n"
+                    "You will stop incurring charges.",
                     id="confirm-destroy-body",
                     classes="modal-body",
                 )
                 with Horizontal(classes="modal-option"):
-                    yield Label("No volver a preguntar en esta sesión:")
+                    yield Label("Don't ask again for this session:")
                     yield Switch(id="switch-no-ask-destroy", value=False)
                 with Center(classes="modal-actions"):
                     yield Button(
-                        "No, cancelar",
+                        "No, Cancel",
                         id="btn-destroy-no",
                         variant="default",
                         classes="btn-secondary",
                     )
                     yield Button(
-                        "Sí, destruir",
+                        "Yes, Destroy",
                         id="btn-destroy-yes",
                         variant="error",
                         classes="btn-danger",

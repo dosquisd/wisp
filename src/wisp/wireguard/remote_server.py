@@ -79,7 +79,7 @@ def configure_remote_server(
 
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    _report("Conectando al servidor por SSH...")
+    _report("Connecting to server over SSH...")
 
     try:
         # Connect via SSH using the private key (try multiple key types for PKCS#8/OpenSSH)
@@ -112,7 +112,7 @@ def configure_remote_server(
         logger.debug(f"SSH connection established to {ssh_user}@{instance_ip}")
 
         # Upload the install script via SFTP
-        _report("Cargando el instalador de WireGuard al servidor...")
+        _report("Uploading WireGuard installer to the server...")
         sftp = ssh.open_sftp()
         remote_script_path = "/tmp/wireguard-install.sh"
         sftp.put(str(WIREGUARD_SCRIPT_PATH), remote_script_path)
@@ -129,7 +129,7 @@ def configure_remote_server(
         env_prefix = " ".join(f"{k}={v}" for k, v in env_vars.items())
         command = f"sudo {env_prefix} {remote_script_path}"
         logger.debug(f"Executing remote command: {command}")
-        _report("Instalando WireGuard en el servidor (puede tardar varios minutos)...")
+        _report("Installing WireGuard on the server (this may take several minutes)...")
 
         # Execute the script with a pseudo-terminal for sudo
         stdin, stdout, stderr = ssh.exec_command(command, get_pty=True, timeout=300)
@@ -180,7 +180,7 @@ def configure_remote_server(
 
         # Wait a moment for the client config file to be created
         time.sleep(2)
-        _report("Descargando la configuración del cliente...")
+        _report("Downloading client configuration...")
 
         # Download the client configuration via SFTP
         sftp = ssh.open_sftp()

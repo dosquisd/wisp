@@ -100,30 +100,30 @@ class ShutdownScreen(WispScreen):
         with CenterMiddle():
             with Vertical(classes="card"):
                 yield Static(
-                    "[bold yellow]Limpiando recursos huérfanos[/bold yellow]"
+                    "[bold yellow]Cleaning up orphaned resources[/bold yellow]"
                     if cleaning
-                    else "[bold yellow]Destruyendo el túnel[/bold yellow]",
+                    else "[bold yellow]Destroying tunnel[/bold yellow]",
                     id="shutdown-title",
                     classes="title",
                 )
                 yield Static(
-                    "Un proceso anterior dejó recursos activos. "
-                    "Se están eliminando ahora."
+                    "A previous process left resources active. "
+                    "They are being cleaned up now."
                     if cleaning
                     else (
-                        "Los recursos en la nube se están eliminando. "
-                        "Espera a que termine."
+                        "Cloud resources are being destroyed. "
+                        "Please wait until complete."
                     ),
                     id="shutdown-subtitle",
                     classes="subtitle",
                 )
                 with Center(id="shutdown-progress-center"):
                     yield ProgressBar(id="shutdown-progress", total=100, show_eta=False)
-                yield Static("Iniciando teardown...", id="shutdown-status")
+                yield Static("Starting teardown...", id="shutdown-status")
                 yield Static(
-                    "Volverás al menú al terminar."
+                    "Returning to the menu when finished."
                     if cleaning
-                    else "No cierres la terminal hasta que finalice.",
+                    else "The app will exit when finished.",
                     id="shutdown-note",
                     classes="subtitle",
                 )
@@ -173,7 +173,7 @@ class ShutdownScreen(WispScreen):
         try:
             self.app.call_from_thread(
                 self._set_status,
-                f"Destruyendo recursos de {orphan.provider.upper()}/{orphan.region}...",
+                f"Destroying resources for {orphan.provider.upper()}/{orphan.region}...",
             )
             teardown_active_session(
                 orphan.provider,
@@ -218,23 +218,23 @@ class ShutdownScreen(WispScreen):
             pbar = self.query_one("#shutdown-progress", ProgressBar)
             status = self.query_one("#shutdown-status", Static)
             if failed:
-                title.update("[bold red]✗ Teardown incompleto[/bold red]")
+                title.update("[bold red]✗ Teardown incomplete[/bold red]")
                 status.update(
-                    detail or "Los recursos podrían seguir activos; revisa la nube."
+                    detail or "Resources may still be active; check your cloud console."
                 )
                 note.update(
-                    "Volverás al menú; puedes reintentarlo o ejecutar "
-                    "'wisp destroy' para limpiar lo que quede."
+                    "Returning to the menu; you can retry or run "
+                    "'wisp destroy' manually."
                 )
                 pbar.progress = 100
             else:
-                title.update("[bold green]✓ Recursos liberados[/bold green]")
+                title.update("[bold green]✓ Resources released[/bold green]")
                 if cleaning:
-                    status.update("Recursos huérfanos eliminados.")
-                    note.update("Volviendo al menú...")
+                    status.update("Orphaned resources cleaned up.")
+                    note.update("Returning to the menu...")
                 else:
-                    status.update("Túnel destruido. Cerrando...")
-                    note.update("Todo listo.")
+                    status.update("Tunnel destroyed. Done.")
+                    note.update("All done.")
                 pbar.progress = 100
         except Exception:
             pass
@@ -271,7 +271,7 @@ def request_shutdown(app, reason: str) -> None:
 def confirmed_destroy(app, choice: tuple[bool, bool] | None, reason: str) -> bool:
     """Honour a :class:`ConfirmDestroyScreen` verdict.
 
-    Applies the "no volver a preguntar" switch by persisting
+    Applies the "Don't ask again" switch by persisting
     ``[general].confirm_destroy = false``, then routes the teardown through
     :func:`request_shutdown` so every destroy trigger shares the same guard.
 

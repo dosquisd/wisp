@@ -14,10 +14,10 @@ class MainMenuScreen(WispScreen):
     """Landing screen; shows current config and navigates to other screens."""
 
     BINDINGS = [
-        Binding("1", "deploy", "Desplegar", show=True),
-        Binding("2", "config", "Configuración", show=True),
-        Binding("3", "quit", "Salir", show=True),
-        Binding("4", "cleanup_orphan", "Limpiar huérfano", show=False),
+        Binding("1", "deploy", "Deploy", show=True),
+        Binding("2", "config", "Settings", show=True),
+        Binding("3", "quit", "Exit", show=True),
+        Binding("4", "cleanup_orphan", "Cleanup Orphan", show=False),
     ]
 
     # Rendered with the official figlet "ANSI Shadow" W/I/S/P glyphs
@@ -34,7 +34,7 @@ class MainMenuScreen(WispScreen):
 
     # Scoped to this screen only (doesn't touch .title/.subtitle/.btn-* on
     # other screens, which legitimately need the roomier default spacing).
-    # This menu is the one screen where scrolling to reach "Salir" is
+    # This menu is the one screen where scrolling to reach "Exit" is
     # actually bad UX — it's the exit door — so every row here is trimmed
     # to make the whole card fit without scrolling on a normal terminal.
     # Padding drops to 0 vertical (the round border already provides
@@ -82,25 +82,23 @@ class MainMenuScreen(WispScreen):
         with CenterMiddle():
             with Vertical(classes="card"):
                 yield Static(self.BANNER, classes="title")
-                yield Static(
-                    "VPNs efímeras de WireGuard bajo demanda", classes="subtitle"
-                )
+                yield Static("Ephemeral WireGuard VPNs on demand", classes="subtitle")
                 yield Static("", id="orphan-warning", classes="orphan-warning")
                 yield Static(self._get_status_text(), id="status-preview")
                 yield Button(
-                    "1. Desplegar VPN",
+                    "1. Deploy VPN",
                     id="btn-deploy",
                     variant="primary",
                     classes="btn-primary",
                 )
                 yield Button(
-                    "2. Configuración",
+                    "2. Settings",
                     id="btn-config",
                     variant="default",
                     classes="btn-secondary",
                 )
                 yield Button(
-                    "3. Salir",
+                    "3. Exit",
                     id="btn-quit",
                     variant="error",
                     classes="btn-danger",
@@ -113,7 +111,7 @@ class MainMenuScreen(WispScreen):
                 # `can_focus=False` makes that structurally impossible; the row
                 # stays reachable through the `4` binding and the mouse.
                 orphan_button = Button(
-                    "Limpiar recursos huérfanos",
+                    "Clean up orphaned resources",
                     id="btn-orphan-cleanup",
                     variant="warning",
                     classes="btn-danger",
@@ -148,15 +146,15 @@ class MainMenuScreen(WispScreen):
         warning.display = True
         button.display = True
         warning.update(
-            f"[bold yellow]⚠ Sesión huérfana[/bold yellow]\n"
+            f"[bold yellow]⚠ Orphaned session[/bold yellow]\n"
             f"[dim]{orphan.provider.upper()}/{orphan.region} "
-            f"activada por el proceso {orphan.pid}, "
-            f"que ya no existe. Sus recursos siguen facturando.[/dim]"
+            f"started by process {orphan.pid}, "
+            f"which no longer exists. Cloud resources may still be running.[/dim]"
         )
         # The key hint is in the label because the footer binding is hidden:
         # the row appears conditionally, so a static footer entry would either
         # advertise a key that does nothing or lie about what exists.
-        button.label = f"4. Limpiar recursos huérfanos ({orphan.provider.upper()})"
+        button.label = f"4. Clean up orphaned resources ({orphan.provider.upper()})"
 
     def action_cleanup_orphan(self) -> None:
         """Destroy the resources left behind by a dead run."""
@@ -187,18 +185,16 @@ class MainMenuScreen(WispScreen):
         port_str = (
             f"UDP {cfg.wireguard_port}"
             if cfg.wireguard_port > 0
-            else "Aleatorio (49152-65535)"
+            else "Random (49152-65535)"
         )
         ip_mode = (
-            "Solo mi IP actual (/32)"
-            if cfg.force_current_ip
-            else "Cualquier IP (0.0.0.0/0)"
+            "My current IP only (/32)" if cfg.force_current_ip else "Any IP (0.0.0.0/0)"
         )
         return (
-            f"[dim]Proveedor:[/dim] [cyan]{state.provider_name.upper()}[/cyan]   "
-            f"[dim]Región:[/dim] [yellow]{state.selected_region}[/yellow]\n"
+            f"[dim]Provider:[/dim] [cyan]{state.provider_name.upper()}[/cyan]   "
+            f"[dim]Region:[/dim] [yellow]{state.selected_region}[/yellow]\n"
             f"[dim]Timeout:[/dim] [white]{cfg.vm_boot_timeout}s[/white]   "
-            f"[dim]Puerto:[/dim] [white]{port_str}[/white]\n"
+            f"[dim]Port:[/dim] [white]{port_str}[/white]\n"
             f"[dim]Firewall:[/dim] [white]{ip_mode}[/white]"
         )
 

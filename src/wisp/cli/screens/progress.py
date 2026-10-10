@@ -23,7 +23,7 @@ class ProgressScreen(WispScreen):
     """
 
     BINDINGS = [
-        Binding("escape", "back", "Volver", show=True),
+        Binding("escape", "back", "Back", show=True),
     ]
 
     CSS = """
@@ -78,12 +78,12 @@ class ProgressScreen(WispScreen):
         with Center():
             with Vertical(classes="card"):
                 yield Static(
-                    "[bold cyan]Despliegue en Curso[/bold cyan]",
+                    "[bold cyan]Deployment in Progress[/bold cyan]",
                     id="progress-title",
                     classes="title",
                 )
                 yield Static(
-                    "Aprovisionando recursos. Por favor no cierres la ventana.",
+                    "Provisioning resources. Please do not close the window.",
                     id="progress-subtitle",
                     classes="subtitle",
                 )
@@ -95,20 +95,20 @@ class ProgressScreen(WispScreen):
                         show_percentage=True,
                     )
                 yield Static(
-                    "Iniciando proceso de despliegue...",
+                    "Starting deployment process...",
                     id="progress-status-msg",
                 )
                 yield Static("", id="results-box")
 
                 with Horizontal(id="progress-buttons", classes="btn-group"):
                     yield Button(
-                        "Volver al Menú",
-                        id="btn-progress-back",
+                        "Back to Menu",
+                        id="btn-done",
                         variant="primary",
                         classes="btn-primary",
                     )
                     yield Button(
-                        "Destruir VPN",
+                        "Destroy VPN",
                         id="btn-progress-destroy",
                         variant="error",
                         classes="btn-danger",
@@ -142,16 +142,16 @@ class ProgressScreen(WispScreen):
         results = self.query_one("#results-box", Static)
         buttons = self.query_one("#progress-buttons", Horizontal)
 
-        title.update("[bold cyan]Despliegue en Curso[/bold cyan]")
+        title.update("[bold cyan]Deployment in Progress[/bold cyan]")
         state = self.app.state  # type: ignore[attr-defined]
         provider_name = self._get_provider_name()
         subtitle.update(
-            f"Desplegando en {provider_name} ([yellow]{state.selected_region}[/yellow])..."
+            f"Deploying to {provider_name} ([yellow]{state.selected_region}[/yellow])..."
         )
         pbar.styles.display = "block"
         pbar.progress = 5
         status_msg.styles.display = "block"
-        status_msg.update("Iniciando infraestructura...")
+        status_msg.update("Starting infrastructure...")
         results.styles.display = "none"
         buttons.styles.display = "none"
 
@@ -196,17 +196,17 @@ class ProgressScreen(WispScreen):
         results = self.query_one("#results-box", Static)
         buttons = self.query_one("#progress-buttons", Horizontal)
 
-        title.update("[bold green]✓ VPN Desplegada y Activa[/bold green]")
-        subtitle.update("La máquina virtual y el túnel WireGuard están listos.")
+        title.update("[bold green]✓ VPN Deployed and Active[/bold green]")
+        subtitle.update("VM and WireGuard tunnel are ready.")
         pbar.styles.display = "none"
         status_msg.styles.display = "none"
 
         results_text = (
-            f"[bold green]Estado:[/bold green] Activa\n"
-            f"[bold cyan]ID de Instancia:[/bold cyan] {result['instance_id']}\n"
-            f"[bold cyan]IP Pública:[/bold cyan] [yellow]{result['public_ip']}[/yellow]\n"
-            f"[bold cyan]Puerto WireGuard:[/bold cyan] UDP {result['wireguard_port']}\n"
-            f"[bold cyan]IP Privada:[/bold cyan] {result['private_ip']}"
+            f"[bold green]Status:[/bold green] Active\n"
+            f"[bold cyan]Instance ID:[/bold cyan] {result['instance_id']}\n"
+            f"[bold cyan]Public IP:[/bold cyan] [yellow]{result['public_ip']}[/yellow]\n"
+            f"[bold cyan]WireGuard Port:[/bold cyan] UDP {result['wireguard_port']}\n"
+            f"[bold cyan]Private IP:[/bold cyan] {result['private_ip']}"
         )
         results.update(results_text)
         results.styles.border = ("round", "#10b981")
@@ -253,7 +253,7 @@ class ProgressScreen(WispScreen):
                 reason (str): Why the session is shutting down.
             """
             report = app.thread_safe_call
-            report(f"Destruyendo el túnel ({reason})...")
+            report(f"Destroying tunnel ({reason})...")
             teardown_active_session(
                 provider_name,
                 region,
@@ -271,8 +271,8 @@ class ProgressScreen(WispScreen):
         buttons = self.query_one("#progress-buttons", Horizontal)
         destroy_btn = self.query_one("#btn-progress-destroy", Button)
 
-        title.update("[bold red]✗ Error en la Operación[/bold red]")
-        subtitle.update("Ocurrió un problema durante el proceso:")
+        title.update("[bold red]✗ Operation Failed[/bold red]")
+        subtitle.update("An error occurred during the operation:")
         pbar.styles.display = "none"
 
         status_msg.update(f"[red]{error_msg}[/red]")
@@ -318,8 +318,8 @@ class ProgressScreen(WispScreen):
         if self._deploying:
             try:
                 self.query_one("#progress-status-msg", Static).update(
-                    "Espera a que termine el despliegue "
-                    "(q / Ctrl+C para salir y destruir)."
+                    "Wait for the deployment to finish "
+                    "(q / Ctrl+C to exit and destroy)."
                 )
             except Exception:
                 pass

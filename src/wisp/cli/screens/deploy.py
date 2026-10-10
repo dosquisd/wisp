@@ -59,7 +59,7 @@ class DeployScreen(WispScreen):
     """Provider/region selection with a live deploy summary."""
 
     BINDINGS = [
-        Binding("escape", "back", "Volver", show=True),
+        Binding("escape", "back", "Back", show=True),
     ]
 
     CSS = """
@@ -114,16 +114,16 @@ class DeployScreen(WispScreen):
         with CenterMiddle():
             with Vertical(classes="card", id="deploy-card"):
                 yield Static(
-                    "[bold cyan]Asistente de Despliegue[/bold cyan]", classes="title"
+                    "[bold cyan]Deployment Wizard[/bold cyan]", classes="title"
                 )
                 yield Static(
-                    "Selecciona el proveedor y la región para la nueva VPN.",
+                    "Select provider and region for the new VPN.",
                     classes="subtitle",
                 )
 
                 with Vertical(id="deploy-container"):
                     provider_val = self._initial_provider()
-                    yield Label("1. Proveedor de Infraestructura:")
+                    yield Label("1. Cloud Provider:")
                     yield Select(
                         options=[
                             ("Amazon Web Services (AWS)", "aws"),
@@ -135,7 +135,7 @@ class DeployScreen(WispScreen):
                         id="select-provider",
                     )
 
-                    yield Label("2. Región de Despliegue:")
+                    yield Label("2. Deployment Region:")
                     current_region = self.app.state.selected_region  # type: ignore[attr-defined]
                     regions = self._get_fallback_regions(provider_val)
                     if current_region in regions:
@@ -154,7 +154,7 @@ class DeployScreen(WispScreen):
                         id="region-status",
                     )
 
-                    yield Label("3. Resumen y Confirmación:")
+                    yield Label("3. Summary & Confirmation:")
                     yield Static(
                         self._build_summary(current_region, provider_val),
                         id="deploy-summary",
@@ -162,13 +162,13 @@ class DeployScreen(WispScreen):
 
                 with Horizontal(classes="btn-group"):
                     yield Button(
-                        "Iniciar Despliegue",
+                        "Start Deployment",
                         id="btn-start-deploy",
                         variant="primary",
                         classes="btn-primary",
                     )
                     yield Button(
-                        "Cancelar",
+                        "Cancel",
                         id="btn-cancel",
                         variant="default",
                         classes="btn-secondary",
@@ -229,7 +229,7 @@ class DeployScreen(WispScreen):
             provider_name = get_provider_display_name(provider_val)
             status = self.query_one("#region-status", Static)
             status.update(
-                f"[green]✓ {len(regions)} regiones disponibles en {provider_name}[/green]"
+                f"[green]✓ {len(regions)} regions available for {provider_name}[/green]"
             )
             self.query_one("#deploy-summary", Static).update(
                 self._build_summary(str(current_val), provider_val)
@@ -242,9 +242,7 @@ class DeployScreen(WispScreen):
             status = self.query_one("#region-status", Static)
             provider_val = str(self.query_one("#select-provider", Select).value)
             provider_name = get_provider_display_name(provider_val)
-            status.update(
-                f"[dim](Usando lista estándar de regiones {provider_name})[/dim]"
-            )
+            status.update(f"[dim](Using standard {provider_name} region list)[/dim]")
         except Exception:
             pass
 
@@ -277,25 +275,21 @@ class DeployScreen(WispScreen):
         state = self.app.state  # type: ignore[attr-defined]
         cfg = state.config
         provider_name = get_provider_display_name(provider_val)
-        port_text = (
-            f"UDP {cfg.wireguard_port}" if cfg.wireguard_port > 0 else "Aleatorio"
-        )
-        ip_mode = (
-            "Solo tu IP (/32)" if cfg.force_current_ip else "Cualquier IP (0.0.0.0/0)"
-        )
+        port_text = f"UDP {cfg.wireguard_port}" if cfg.wireguard_port > 0 else "Random"
+        ip_mode = "Your IP only (/32)" if cfg.force_current_ip else "Any IP (0.0.0.0/0)"
 
         # Credential status
         creds = state.get_credentials_for_provider(provider_val)
         cred_status = (
-            "[green]✓ Configurado[/green]"
+            "[green]✓ Configured[/green]"
             if creds and creds.is_explicitly_configured()
-            else "[yellow]⚠ Auto-detectado[/yellow]"
+            else "[yellow]⚠ Auto-detected[/yellow]"
         )
 
         return (
-            f"[cyan]Destino:[/cyan] {provider_name} ({region})   [cyan]Timeout:[/cyan] {cfg.vm_boot_timeout}s\n"
-            f"[cyan]Puerto:[/cyan] {port_text}   [cyan]DNS:[/cyan] {cfg.wireguard_dns1}, {cfg.wireguard_dns2}\n"
-            f"[cyan]Firewall:[/cyan] {ip_mode}   [cyan]Credenciales:[/cyan] {cred_status}"
+            f"[cyan]Target:[/cyan] {provider_name} ({region})   [cyan]Timeout:[/cyan] {cfg.vm_boot_timeout}s\n"
+            f"[cyan]Port:[/cyan] {port_text}   [cyan]DNS:[/cyan] {cfg.wireguard_dns1}, {cfg.wireguard_dns2}\n"
+            f"[cyan]Firewall:[/cyan] {ip_mode}   [cyan]Credentials:[/cyan] {cred_status}"
         )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:

@@ -43,7 +43,7 @@ class ConfigScreen(WispScreen):
     """Form to edit session config in memory, with inline validation."""
 
     BINDINGS = [
-        Binding("escape", "back", "Volver", show=True),
+        Binding("escape", "back", "Back", show=True),
     ]
 
     CSS = """
@@ -147,59 +147,56 @@ class ConfigScreen(WispScreen):
         yield Header(show_clock=True)
         with CenterMiddle():
             with Vertical(classes="card"):
+                yield Static("[bold cyan]Session Settings[/bold cyan]", classes="title")
                 yield Static(
-                    "[bold cyan]Configuración de Sesión[/bold cyan]", classes="title"
-                )
-                yield Static(
-                    "Modifica los parámetros para los despliegues de esta sesión.",
+                    "Modify deployment parameters for this session.",
                     classes="subtitle",
                 )
                 yield Static(describe_config_sources(), id="config-source-note")
                 yield Static("", id="dirty-marker")
 
                 with Vertical(id="form-container"):
-                    yield Label("Timeout VM Boot (segundos para boot):")
+                    yield Label("VM Boot Timeout (seconds):")
                     yield Input(
                         id="input-vm-boot-timeout",
                         value=str(self.app.state.config.vm_boot_timeout),
                         type="integer",
                     )
 
-                    yield Label("Puerto WireGuard (0 = aleatorio 49152-65535):")
+                    yield Label("WireGuard Port (0 = random 49152-65535):")
                     yield Input(
                         id="input-wireguard-port",
                         value=str(self.app.state.config.wireguard_port),
                         type="integer",
                     )
 
-                    yield Label("Interfaz de WireGuard:")
+                    yield Label("WireGuard Interface:")
                     yield Input(
                         id="input-wireguard-interface",
                         value=self.app.state.config.wireguard_interface,
                     )
 
-                    yield Label("DNS Primario:")
+                    yield Label("Primary DNS:")
                     yield Input(
                         id="input-dns1",
                         value=self.app.state.config.wireguard_dns1,
                     )
 
-                    yield Label("DNS Secundario:")
+                    yield Label("Secondary DNS:")
                     yield Input(
                         id="input-dns2",
                         value=self.app.state.config.wireguard_dns2,
                     )
 
                     with Horizontal(id="switch-row"):
-                        yield Label("Restringir acceso solo a mi IP pública:")
+                        yield Label("Restrict access to my public IP only:")
                         yield Switch(
                             id="switch-force-ip",
                             value=self.app.state.config.force_current_ip,
                         )
 
                 yield Static(
-                    "[bold]Credenciales[/bold] [dim](solo lectura — desde wisp.toml "
-                    "o env)[/dim]",
+                    "[bold]Credentials[/bold] [dim](read-only — from wisp.toml or env)[/dim]",
                     id="credentials-heading",
                     classes="subtitle",
                 )
@@ -209,17 +206,17 @@ class ConfigScreen(WispScreen):
                         collapsed=True,
                         id="cred-aws-collapsible",
                     ):
-                        yield Label("Región (editable — se guarda en wisp.toml):")
+                        yield Label("Region (editable — saved to wisp.toml):")
                         yield Input(
                             id="input-aws-region",
                             value=self.app.state.aws_credentials.region,
-                            placeholder="p.ej. us-east-2",
+                            placeholder="e.g. us-east-2",
                         )
                         yield Static(
                             self._aws_cred_text(revealed=False), id="aws-cred-text"
                         )
                         with Horizontal(classes="cred-reveal-row"):
-                            yield Label("Mostrar valores completos:")
+                            yield Label("Show full values:")
                             yield Switch(id="switch-reveal-aws", value=False)
 
                     with Collapsible(
@@ -227,17 +224,17 @@ class ConfigScreen(WispScreen):
                         collapsed=True,
                         id="cred-oci-collapsible",
                     ):
-                        yield Label("Región (editable — se guarda en wisp.toml):")
+                        yield Label("Region (editable — saved to wisp.toml):")
                         yield Input(
                             id="input-oci-region",
                             value=self.app.state.oci_credentials.region,
-                            placeholder="p.ej. us-ashburn-1",
+                            placeholder="e.g. us-ashburn-1",
                         )
                         yield Static(
                             self._oci_cred_text(revealed=False), id="oci-cred-text"
                         )
                         with Horizontal(classes="cred-reveal-row"):
-                            yield Label("Mostrar valores completos:")
+                            yield Label("Show full values:")
                             yield Switch(id="switch-reveal-oci", value=False)
 
                     with Collapsible(
@@ -245,36 +242,36 @@ class ConfigScreen(WispScreen):
                         collapsed=True,
                         id="cred-gcp-collapsible",
                     ):
-                        yield Label("Región (editable — se guarda en wisp.toml):")
+                        yield Label("Region (editable — saved to wisp.toml):")
                         yield Input(
                             id="input-gcp-region",
                             value=self.app.state.gcp_credentials.region,
-                            placeholder="p.ej. us-central1",
+                            placeholder="e.g. us-central1",
                         )
                         yield Static(
                             self._gcp_cred_text(revealed=False), id="gcp-cred-text"
                         )
                         with Horizontal(classes="cred-reveal-row"):
-                            yield Label("Mostrar valores completos:")
+                            yield Label("Show full values:")
                             yield Switch(id="switch-reveal-gcp", value=False)
 
                 yield Static("", id="error-message")
 
                 with Horizontal(classes="btn-group"):
                     yield Button(
-                        "Guardar",
+                        "Save",
                         id="btn-save",
                         variant="primary",
                         classes="btn-primary",
                     )
                     yield Button(
-                        "Restablecer",
+                        "Reset",
                         id="btn-reset",
                         variant="default",
                         classes="btn-secondary",
                     )
                     yield Button(
-                        "Volver",
+                        "Back",
                         id="btn-back",
                         variant="default",
                         classes="btn-secondary",
@@ -285,19 +282,19 @@ class ConfigScreen(WispScreen):
 
     def _aws_cred_title(self) -> str:
         creds = self.app.state.aws_credentials
-        status = "Configurado" if creds.is_explicitly_configured() else "Auto-detectado"
+        status = "Configured" if creds.is_explicitly_configured() else "Auto-detected"
         return f"AWS — {status}"
 
     def _oci_cred_title(self) -> str:
         creds = self.app.state.oci_credentials
-        status = "Configurado" if creds.is_explicitly_configured() else "Auto-detectado"
+        status = "Configured" if creds.is_explicitly_configured() else "Auto-detected"
         return f"OCI — {status}"
 
     def _gcp_cred_title(self) -> str:
         creds = self.app.state.gcp_credentials
         if creds.is_explicitly_configured():
-            return "GCP — Configurado"
-        return "GCP — Auto-detectado (ADC)"
+            return "GCP — Configured"
+        return "GCP — Auto-detected (ADC)"
 
     def _aws_cred_text(self, revealed: bool) -> str:
         creds = self.app.state.aws_credentials
@@ -364,7 +361,7 @@ class ConfigScreen(WispScreen):
                 _cred_line(
                     "Project ID", creds.project_id, sensitive=False, revealed=revealed
                 ),
-                _cred_line("Región", creds.region, sensitive=False, revealed=revealed),
+                _cred_line("Region", creds.region, sensitive=False, revealed=revealed),
                 _cred_line(
                     "Zona", creds.get_zone(), sensitive=False, revealed=revealed
                 ),
@@ -417,10 +414,10 @@ class ConfigScreen(WispScreen):
         self._preserve_dirty = self._is_dirty()
         self.app.push_screen(
             ConfirmActionScreen(
-                title="¿Guardar la configuración?",
-                body="Los cambios se aplicarán a la sesión y se escribirán\n"
-                "en el wisp.toml activo.",
-                confirm_label="Guardar",
+                title="Save settings?",
+                body="Changes will apply to this session and be written\n"
+                "to the active wisp.toml.",
+                confirm_label="Save",
             ),
             self._on_save_choice,
         )
@@ -448,27 +445,27 @@ class ConfigScreen(WispScreen):
         try:
             timeout_val = int(timeout_raw)
             if timeout_val < 5:
-                error_label.update("[!] El timeout debe ser de al menos 5 segundos.")
+                error_label.update("[!] Timeout must be at least 5 seconds.")
                 return None
         except ValueError:
-            error_label.update("[!] El timeout debe ser un número entero.")
+            error_label.update("[!] Timeout must be an integer.")
             return None
 
         try:
             port_val = int(port_raw)
             if port_val < 0 or port_val > 65535:
-                error_label.update("[!] El puerto debe estar entre 0 y 65535.")
+                error_label.update("[!] Port must be between 0 and 65535.")
                 return None
         except ValueError:
-            error_label.update("[!] El puerto debe ser un número entero.")
+            error_label.update("[!] Port must be an integer.")
             return None
 
         if not interface:
-            error_label.update("[!] La interfaz WireGuard no puede estar vacía.")
+            error_label.update("[!] WireGuard interface name cannot be empty.")
             return None
 
         if not dns1 or not dns2:
-            error_label.update("[!] Los servidores DNS no pueden estar vacíos.")
+            error_label.update("[!] DNS servers cannot be empty.")
             return None
 
         return (timeout_val, port_val, interface, dns1, dns2, force_ip)
@@ -478,7 +475,7 @@ class ConfigScreen(WispScreen):
         to the active ``wisp.toml`` (see :func:`save_session_config`).
 
         Reached normally as the confirmed step after :meth:`_request_save`'s
-        modal, but also called directly (e.g. the discard modal's "Guardar"),
+        modal, but also called directly (e.g. the discard modal's "Save"),
         so it re-validates here — an invalid form never reaches the disk, it
         just bounces with an inline error.
         """
@@ -514,7 +511,7 @@ class ConfigScreen(WispScreen):
                 },
             )
         except Exception as exc:  # e.g. tomli-w missing, permissions, disk full
-            error_label.update(f"[!] No se pudo guardar en disco: {exc}")
+            error_label.update(f"[!] Could not save to disk: {exc}")
             return
 
         # Regions may have changed what's "explicitly configured" for each
@@ -523,7 +520,7 @@ class ConfigScreen(WispScreen):
         state.refresh_credentials()
         self._refresh_credentials_ui()
 
-        self.notify(f"Configuración guardada en {target_path}", severity="information")
+        self.notify(f"Settings saved to {target_path}", severity="information")
         self.app.pop_screen()
 
     def _refresh_credentials_ui(self) -> None:
@@ -585,7 +582,7 @@ class ConfigScreen(WispScreen):
         self.query_one("#input-gcp-region", Input).value = state.gcp_credentials.region
 
         self.query_one("#error-message", Static).update("")
-        self.notify("Configuración restablecida desde wisp.toml", severity="warning")
+        self.notify("Settings reset from wisp.toml", severity="warning")
 
         # The form now mirrors the reloaded state again, so it is the clean
         # baseline for any further edit.
@@ -635,7 +632,7 @@ class ConfigScreen(WispScreen):
         """Show/hide the 'unsaved changes' marker to match reality."""
         marker = self.query_one("#dirty-marker", Static)
         if self._is_dirty():
-            marker.update("[yellow]●[/yellow] Hay cambios sin guardar")
+            marker.update("[yellow]●[/yellow] Unsaved changes")
         else:
             marker.update("")
 
@@ -669,7 +666,7 @@ class ConfigScreen(WispScreen):
         self._refresh_dirty_state()
 
     def _request_reset(self) -> None:
-        """Restablecer always confirms. With unsaved edits the existing
+        """Reset always confirms. With unsaved edits the existing
         discard modal asks first (save/discard/cancel); when clean, a direct
         confirm modal guards the reload from ``wisp.toml``."""
         if self._is_dirty():
@@ -677,10 +674,10 @@ class ConfigScreen(WispScreen):
             return
         self.app.push_screen(
             ConfirmActionScreen(
-                title="¿Restablecer la configuración?",
-                body="Se descartará cualquier edición y el formulario se\n"
-                "recargará desde wisp.toml.",
-                confirm_label="Restablecer",
+                title="Reset settings?",
+                body="Unsaved edits will be discarded and the form reloaded\n"
+                "from wisp.toml.",
+                confirm_label="Reset",
             ),
             self._on_reset_choice,
         )

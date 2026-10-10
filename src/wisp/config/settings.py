@@ -122,7 +122,7 @@ def get_active_config_path() -> Path:
 
     :func:`load_toml_config` already merges *both* files for reading, with
     the user-level file winning key by key. But a single canonical file is
-    still needed as the *write* target — e.g. for the TUI's "Guardar" action
+    still needed as the *write* target — e.g. for the TUI's "Save" action
     — so this is the one place that decides which file that is, instead of
     every caller re-deriving it with its own little existence check (which
     is exactly the kind of scattered logic this function replaces).
@@ -156,11 +156,11 @@ def describe_config_sources() -> str:
 
     if user_has_data and project_has_data:
         return (
-            f"[yellow]⚠[/yellow] Hay dos wisp.toml con datos (usuario y proyecto). "
-            f"Usando el de [bold]usuario[/bold]: [cyan]{active}[/cyan] — el de "
-            f"proyecto solo rellena claves que ese no defina."
+            f"[yellow]⚠[/yellow] Two wisp.toml files contain data (user and "
+            f"project). Using the [bold]user[/bold] one: [cyan]{active}[/cyan] — "
+            f"the project file only fills keys the user file does not define."
         )
-    return f"[dim]Config activa:[/dim] [cyan]{active}[/cyan]"
+    return f"[dim]Active config:[/dim] [cyan]{active}[/cyan]"
 
 
 def get_default_provider() -> str:
@@ -282,7 +282,7 @@ class WispConfig:
             AllowedIPs to your current public IP (``/32``).
         confirm_destroy (bool): If true, the tunnel view asks for confirmation
             before tearing the VPN down (``d``/``esc``/the destroy button). The
-            ``no volver a preguntar`` checkbox in that dialog flips it off and
+            ``Don't ask again`` checkbox in that dialog flips it off and
             persists it to ``[general]``.
     """
 
