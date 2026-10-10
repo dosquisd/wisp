@@ -4,12 +4,13 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import CenterMiddle, Horizontal, Vertical
-from textual.widgets import Button, Footer, Header, Label, Select, Static
+from textual.widgets import Button, Footer, Header, Input, Label, Select, Static, Switch
 
 from wisp.cli.screens.base import WispScreen
 from wisp.cli.screens.progress import ProgressScreen
 from wisp.providers import PROVIDERS_MAP, ProviderEnum
 from wisp.providers.base import get_provider_display_name
+from wisp.providers.vps import VPS_PLACEHOLDER_REGION
 
 # Static region list used until live AWS regions are fetched (or if that fails).
 FALLBACK_AWS_REGIONS = [
@@ -92,6 +93,33 @@ class DeployScreen(WispScreen):
         height: 1;
     }
 
+    /* VPS connection fields: hidden unless the Custom VPS provider is
+       selected; the region step hides in exactly the opposite case. Both
+       containers need explicit `height: auto` — a plain Vertical defaults to
+       `1fr` and would balloon to fill the card, leaving a huge blank gap. */
+    #vps-fields {
+        display: none;
+        height: auto;
+    }
+
+    #region-step {
+        height: auto;
+    }
+
+    #ttl-row {
+        height: auto;
+        margin-top: 1;
+    }
+
+    #ttl-row Label {
+        color: #94a3b8;
+        width: 1fr;
+    }
+
+    #ttl-row Input {
+        width: 12;
+    }
+
     #deploy-summary {
         background: #0b0f19;
         border: solid #334155;
@@ -129,30 +157,84 @@ class DeployScreen(WispScreen):
                             ("Amazon Web Services (AWS)", "aws"),
                             ("Oracle Cloud Infrastructure (OCI)", "oci"),
                             ("Google Cloud Platform (GCP)", "gcp"),
+                            ("Custom VPS (bring your own server)", "vps"),
                         ],
                         value=provider_val,
                         allow_blank=False,
                         id="select-provider",
                     )
 
-                    yield Label("2. Deployment Region:")
-                    current_region = self.app.state.selected_region  # type: ignore[attr-defined]
-                    regions = self._get_fallback_regions(provider_val)
-                    if current_region in regions:
-                        regions = [
-                            current_region,
-                            *[r for r in regions if r != current_region],
-                        ]
-                    yield Select(
-                        options=[(r, r) for r in regions],
-                        value=current_region,
-                        allow_blank=False,
-                        id="select-region",
-                    )
-                    yield Static(
-                        "[dim]Sincronizando regiones...[/dim]",
-                        id="region-status",
-                    )
+                    with Vertical(id="region-step"):
+                        yield Label("2. Deployment Region:")
+                        current_region = self.app.state.selected_region  # type: ignore[attr-defined]
+                        regions = self._get_fallback_regions(provider_val)
+                        if current_region in regions:
+                            regions = [
+                                current_region,
+                                *[r for r in regions if r != current_region],
+                            ]
+                        yield Select(
+                            options=[(r, r) for r in regions],
+                            value=current_region,
+                            allow_blank=False,
+                            id="select-region",
+                        )
+                        yield Static(
+                            "[dim]Syncing regions...[/dim]",
+                            id="region-status",
+                        )
+
+                    # Bring-your-own-server fields: shown only for the VPS
+                    # provider, filled from the resolved credentials.
+                    with Vertical(id="vps-fields"):
+                        yield Label("2. VPS Host (IP or hostname):")
+                        yield Input(
+                            id="input-vps-host",
+                            value=self.app.state.vps_credentials.host,  # type: ignore[attr-defined]
+                            placeholder="e.g. 203.0.113.10",
+                        )
+                        yield Label("SSH User:")
+                        yield Input(
+                            id="input-vps-ssh-user",
+                            value=self.app.state.vps_credentials.ssh_user,  # type: ignore[attr-defined]
+                            placeholder="e.g. root",
+                        )
+                        yield Label("SSH Port:")
+                        yield Input(
+                            id="input-vps-ssh-port",
+                            value=str(self.app.state.vps_credentials.ssh_port),  # type: ignore[attr-defined]
+                            type="integer",
+                            placeholder="22",
+                        )
+                        yield Label(
+                            "SSH Private Key Path (empty = agent/default keys):"
+                        )
+                        yield Input(
+                            id="input-vps-ssh-key-path",
+                            value=self.app.state.vps_credentials.ssh_key_path,  # type: ignore[attr-defined]
+                            placeholder="e.g. ~/.ssh/id_ed25519",
+                        )
+                        yield Label(
+                            "WireGuard Port (0 = random; open it on your firewall):"
+                        )
+                        yield Input(
+                            id="input-vps-wireguard-port",
+                            value=str(self.app.state.config.wireguard_port),  # type: ignore[attr-defined]
+                            type="integer",
+                            placeholder="0",
+                        )
+
+                    with Horizontal(id="ttl-row"):
+                        yield Label("Session TTL watchdog (minutes, 0 = off):")
+                        yield Switch(
+                            id="switch-ttl",
+                            value=self.app.state.effective_session_ttl() > 0,  # type: ignore[attr-defined]
+                        )
+                        yield Input(
+                            id="input-ttl-minutes",
+                            value=str(self.app.state.effective_session_ttl()),  # type: ignore[attr-defined]
+                            type="integer",
+                        )
 
                     yield Label("3. Summary & Confirmation:")
                     yield Static(
@@ -191,9 +273,12 @@ class DeployScreen(WispScreen):
             return FALLBACK_OCI_REGIONS
         elif provider == "gcp":
             return FALLBACK_GCP_REGIONS
+        elif provider == "vps":
+            return [VPS_PLACEHOLDER_REGION]
         return FALLBACK_AWS_REGIONS
 
     def on_mount(self) -> None:
+        self._toggle_vps_fields(str(self.query_one("#select-provider", Select).value))
         self.fetch_live_regions()
 
     def on_screen_resume(self) -> None:
@@ -205,19 +290,33 @@ class DeployScreen(WispScreen):
 
     @work(thread=True)
     def fetch_live_regions(self) -> None:
-        """Fetch live regions for the selected provider in a background thread."""
+        """Fetch live regions for the selected provider in a background thread.
+
+        The provider is captured at fetch start and threaded through every UI
+        callback: a slow response for a provider the user already left is
+        dropped instead of overwriting the Select with another provider's
+        regions (fast-switching race), and a failed fetch repopulates the
+        Select with the provider's standard list instead of leaving the
+        previous provider's options in place.
+        """
         provider_val = str(self.query_one("#select-provider", Select).value)
         try:
             provider_cls = PROVIDERS_MAP[ProviderEnum(provider_val)]
             provider = provider_cls()
             regions = list(provider.get_available_regions())
             if regions:
-                self.app.call_from_thread(self._update_regions_ui, sorted(regions))
+                self.app.call_from_thread(
+                    self._update_regions_ui, provider_val, sorted(regions)
+                )
+            else:
+                self.app.call_from_thread(self._region_fetch_failed, provider_val)
         except Exception:
-            self.app.call_from_thread(self._region_fetch_failed)
+            self.app.call_from_thread(self._region_fetch_failed, provider_val)
 
-    def _update_regions_ui(self, regions: list[str]) -> None:
+    def _update_regions_ui(self, provider_val: str, regions: list[str]) -> None:
         try:
+            if str(self.query_one("#select-provider", Select).value) != provider_val:
+                return  # Stale fetch: the user already switched providers.
             region_select = self.query_one("#select-region", Select)
             current_val = (
                 region_select.value if region_select.value in regions else regions[0]
@@ -225,7 +324,6 @@ class DeployScreen(WispScreen):
             region_select.set_options([(r, r) for r in regions])
             region_select.value = current_val
 
-            provider_val = str(self.query_one("#select-provider", Select).value)
             provider_name = get_provider_display_name(provider_val)
             status = self.query_one("#region-status", Static)
             status.update(
@@ -237,18 +335,35 @@ class DeployScreen(WispScreen):
         except Exception:
             pass
 
-    def _region_fetch_failed(self) -> None:
+    def _region_fetch_failed(self, provider_val: str) -> None:
         try:
-            status = self.query_one("#region-status", Static)
-            provider_val = str(self.query_one("#select-provider", Select).value)
+            if str(self.query_one("#select-provider", Select).value) != provider_val:
+                return  # Stale fetch: the user already switched providers.
+            # Keeping the previous provider's options here would let the user
+            # deploy to a region that does not exist for the selected provider,
+            # so the Select is repopulated with the standard list.
+            regions = self._get_fallback_regions(provider_val)
+            region_select = self.query_one("#select-region", Select)
+            current_val = (
+                region_select.value if region_select.value in regions else regions[0]
+            )
+            region_select.set_options([(r, r) for r in regions])
+            region_select.value = current_val
+
             provider_name = get_provider_display_name(provider_val)
+            status = self.query_one("#region-status", Static)
             status.update(f"[dim](Using standard {provider_name} region list)[/dim]")
+            self.query_one("#deploy-summary", Static).update(
+                self._build_summary(str(current_val), provider_val)
+            )
         except Exception:
             pass
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id == "select-provider":
-            # Provider changed - fetch new regions
+            # Provider changed - fetch new regions and swap the middle step:
+            # cloud providers pick a region, Custom VPS shows its fields.
+            self._toggle_vps_fields(str(event.value))
             self.fetch_live_regions()
         elif event.select.id == "select-region" and event.value is not Select.BLANK:
             self.query_one("#deploy-summary", Static).update(
@@ -257,6 +372,24 @@ class DeployScreen(WispScreen):
                     str(self.query_one("#select-provider", Select).value),
                 )
             )
+
+    def _toggle_vps_fields(self, provider_val: str) -> None:
+        """Show the VPS connection fields and hide the region step (or swap
+        back) when the provider selection changes.
+
+        Args:
+            provider_val (str): Newly selected provider identifier.
+        """
+        try:
+            is_vps = provider_val == ProviderEnum.VPS.value
+            self.query_one("#vps-fields", Vertical).styles.display = (
+                "block" if is_vps else "none"
+            )
+            self.query_one("#region-step", Vertical).styles.display = (
+                "none" if is_vps else "block"
+            )
+        except Exception:
+            pass
 
     def _build_summary(self, region: str, provider_val: str) -> str:
         """Build the deployment summary text for the given region.
@@ -277,6 +410,18 @@ class DeployScreen(WispScreen):
         provider_name = get_provider_display_name(provider_val)
         port_text = f"UDP {cfg.wireguard_port}" if cfg.wireguard_port > 0 else "Random"
         ip_mode = "Your IP only (/32)" if cfg.force_current_ip else "Any IP (0.0.0.0/0)"
+
+        # Custom VPS: the host is the deployment target; there is no region
+        # and no cloud credential chain — SSH access is the whole story.
+        if provider_val == ProviderEnum.VPS.value:
+            creds = state.vps_credentials
+            host = creds.host or "(not set)"
+            return (
+                f"[cyan]Target:[/cyan] {provider_name} ({host})   "
+                f"[cyan]Timeout:[/cyan] {cfg.vm_boot_timeout}s\n"
+                f"[cyan]Port:[/cyan] {port_text}   "
+                f"[cyan]SSH user:[/cyan] {creds.ssh_user}@{creds.ssh_port}"
+            )
 
         # Credential status
         creds = state.get_credentials_for_provider(provider_val)
@@ -307,7 +452,43 @@ class DeployScreen(WispScreen):
         state.provider_name = provider_val
         state.selected_region = region_val
 
+        # Per-deployment TTL watchdog: the switch decides whether it is armed
+        # at all, and the minutes field overrides the configured default.
+        ttl_switch = self.query_one("#switch-ttl", Switch)
+        ttl_raw = self.query_one("#input-ttl-minutes", Input).value.strip()
+        state.session_ttl_minutes = (
+            max(0, int(ttl_raw)) if ttl_switch.value and ttl_raw.isdigit() else 0
+        )
+
+        if provider_val == ProviderEnum.VPS.value:
+            self._apply_vps_fields(state)
+
         self.app.push_screen(ProgressScreen())
+
+    def _apply_vps_fields(self, state) -> None:
+        """Read the VPS connection fields into the state's credentials.
+
+        The form is the source of truth for this deployment; the TOML ``[vps]``
+        section only pre-fills it.
+
+        Args:
+            state (AppState): The app's shared state object.
+        """
+        host = self.query_one("#input-vps-host", Input).value.strip()
+        ssh_user = self.query_one("#input-vps-ssh-user", Input).value.strip() or "root"
+        ssh_port_raw = self.query_one("#input-vps-ssh-port", Input).value.strip()
+        key_path = self.query_one("#input-vps-ssh-key-path", Input).value.strip()
+        wg_port_raw = self.query_one("#input-vps-wireguard-port", Input).value.strip()
+
+        creds = state.vps_credentials
+        creds.host = host
+        creds.ssh_user = ssh_user
+        creds.ssh_port = int(ssh_port_raw) if ssh_port_raw.isdigit() else 22
+        creds.ssh_key_path = key_path
+
+        # The tunnel port feeds WispConfig: 0 keeps the installer's random
+        # choice (the user opens the port themselves afterwards).
+        state.config.wireguard_port = int(wg_port_raw) if wg_port_raw.isdigit() else 0
 
     def action_back(self) -> None:
         self.app.pop_screen()

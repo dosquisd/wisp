@@ -40,8 +40,13 @@
 # wireguard_port = 0              # 0 selects a random port (49152-65535)
 # force_current_ip = false        # restrict firewall + AllowedIPs to /32
 # confirm_destroy = true          # ask before tearing down the VPN from the
-                                  # tunnel view; "no volver a preguntar" in the
+                                  # tunnel view; "don't ask again" in the
                                   # dialog flips this off and saves it here
+# max_session_ttl_minutes = 60    # session lifetime cap for the OS-level
+                                  # watchdog: it runs `wisp destroy` after the
+                                  # TTL so a forgotten session cannot keep a
+                                  # billable VM running forever (0 = off).
+                                  # The deploy screen can override it per run.
 
 
 [aws]

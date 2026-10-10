@@ -13,6 +13,33 @@ from wisp.cli.screens.tunnel import TunnelScreen
 from wisp.providers import PROVIDERS_MAP, ProviderEnum
 from wisp.providers.base import DeployVMResult, get_provider_display_name
 from wisp.session import teardown_active_session, write_active_session
+from wisp.utils.watchdog import schedule_ttl_watchdog
+
+
+def _extract_error_details(exc: Exception) -> str:
+    """Pull a human-readable message out of a failed provision run.
+
+    Pulumi Automation errors wrap a ``command_result`` whose stderr carries
+    the real provider diagnostics; ``str(exc)`` alone is often just
+    ``"code: 1"``. The most informative lines are kept: every line that
+    mentions an error, or — when none do — the last few lines of output,
+    which is where Pulumi prints its failure summary.
+
+    Args:
+        exc (Exception): The raised deploy/destroy exception.
+
+    Returns:
+        str: Multi-line diagnostic text suitable for the error box.
+    """
+    command_result = getattr(exc, "command_result", None)
+    if command_result is not None:
+        text = f"{command_result.stderr or ''}\n{command_result.stdout or ''}"
+        lines = [line for line in text.splitlines() if line.strip()]
+        error_lines = [line for line in lines if "error" in line.lower()]
+        detail = "\n".join(error_lines[:10]) if error_lines else "\n".join(lines[-10:])
+        if detail.strip():
+            return detail
+    return str(exc)
 
 
 class ProgressScreen(WispScreen):
@@ -43,6 +70,8 @@ class ProgressScreen(WispScreen):
         margin-top: 1;
         margin-bottom: 1;
         height: auto;
+        max-height: 16;
+        overflow-y: auto;
     }
 
     #progress-buttons {
@@ -119,9 +148,16 @@ class ProgressScreen(WispScreen):
         self.start_deployment()
 
     def _get_provider(self):
-        """Get the provider instance based on state."""
+        """Get the provider instance based on state.
+
+        The Custom VPS provider receives the state's credentials, which the
+        deploy screen fills from its form fields (not from the TOML).
+        """
         state = self.app.state  # type: ignore[attr-defined]
-        provider_cls = PROVIDERS_MAP[ProviderEnum(state.provider_name)]
+        provider_enum = ProviderEnum(state.provider_name)
+        provider_cls = PROVIDERS_MAP[provider_enum]
+        if provider_enum == ProviderEnum.VPS:
+            return provider_cls(credentials=state.vps_credentials)
         return provider_cls()
 
     def _get_provider_name(self) -> str:
@@ -131,6 +167,12 @@ class ProgressScreen(WispScreen):
 
     def start_deployment(self) -> None:
         self._deploying = True
+        # Arm the guard BEFORE provisioning starts: a deploy that dies (TUI
+        # closed, console killed, crash) must leave the marker behind and have
+        # the signal handlers cancel the in-flight update and destroy the
+        # partial resources — otherwise the deploy's leftovers are invisible
+        # to orphan detection and keep billing. Re-armed unchanged on success.
+        self._arm_session_guard()
         self._set_deploying_ui()
         self.run_deployment_worker()
 
@@ -172,7 +214,7 @@ class ProgressScreen(WispScreen):
             )
             self.app.call_from_thread(self._handle_success, result)
         except Exception as exc:
-            self.app.call_from_thread(self._handle_error, str(exc))
+            self.app.call_from_thread(self._handle_error, _extract_error_details(exc))
 
     def _handle_progress(self, msg: str, progress: float | None) -> None:
         try:
@@ -246,6 +288,13 @@ class ProgressScreen(WispScreen):
 
         write_active_session(provider_name, region)
 
+        # Optional OS-level TTL watchdog: fires `wisp destroy` even if this
+        # process dies, so a forgotten session cannot bill forever. The TTL
+        # comes from the deploy screen's toggle; 0 keeps the watchdog off.
+        ttl_minutes = state.effective_session_ttl()
+        if ttl_minutes > 0:
+            schedule_ttl_watchdog(provider_name, region, ttl_minutes)
+
         def teardown(reason: str) -> None:
             """Release the session's resources.
 
@@ -268,6 +317,7 @@ class ProgressScreen(WispScreen):
         subtitle = self.query_one("#progress-subtitle", Static)
         pbar = self.query_one("#progress-bar", ProgressBar)
         status_msg = self.query_one("#progress-status-msg", Static)
+        results = self.query_one("#results-box", Static)
         buttons = self.query_one("#progress-buttons", Horizontal)
         destroy_btn = self.query_one("#btn-progress-destroy", Button)
 
@@ -275,10 +325,16 @@ class ProgressScreen(WispScreen):
         subtitle.update("An error occurred during the operation:")
         pbar.styles.display = "none"
 
-        status_msg.update(f"[red]{error_msg}[/red]")
-        status_msg.styles.display = "block"
+        status_msg.styles.display = "none"
+        results.update(f"[bold red]Error:[/bold red]\n{error_msg}")
+        results.styles.border = ("round", "#ef4444")
+        results.styles.display = "block"
 
-        destroy_btn.styles.display = "none"
+        # A failed provision run can still have created billable resources
+        # (e.g. the VM exists but a later step failed), so the session guard
+        # is armed and the destroy path is surfaced exactly as on success.
+        self._arm_session_guard()
+        destroy_btn.styles.display = "block"
         buttons.styles.display = "block"
 
     def on_button_pressed(self, event: Button.Pressed) -> None:

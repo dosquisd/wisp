@@ -188,6 +188,13 @@ class ConfigScreen(WispScreen):
                         value=self.app.state.config.wireguard_dns2,
                     )
 
+                    yield Label("Session TTL (minutes, 0 = watchdog off):")
+                    yield Input(
+                        id="input-session-ttl",
+                        value=str(self.app.state.config.max_session_ttl_minutes),
+                        type="integer",
+                    )
+
                     with Horizontal(id="switch-row"):
                         yield Label("Restrict access to my public IP only:")
                         yield Switch(
@@ -426,18 +433,20 @@ class ConfigScreen(WispScreen):
         if confirmed:
             self.save_config()
 
-    def _validate_form(self) -> tuple[int, int, str, str, str, bool] | None:
+    def _validate_form(self) -> tuple[int, int, str, str, str, bool, int] | None:
         """Read the editable ``[general]`` fields and validate them.
 
         Shows an inline error and returns ``None`` when any field is invalid
-        (timeout < 5, port out of ``0-65535``, empty interface/DNS); otherwise
-        the parsed ``(timeout, port, interface, dns1, dns2, force_ip)``.
+        (timeout < 5, port out of ``0-65535``, negative TTL, empty
+        interface/DNS); otherwise the parsed
+        ``(timeout, port, interface, dns1, dns2, force_ip, ttl)``.
         """
         timeout_raw = self.query_one("#input-vm-boot-timeout", Input).value.strip()
         port_raw = self.query_one("#input-wireguard-port", Input).value.strip()
         interface = self.query_one("#input-wireguard-interface", Input).value.strip()
         dns1 = self.query_one("#input-dns1", Input).value.strip()
         dns2 = self.query_one("#input-dns2", Input).value.strip()
+        ttl_raw = self.query_one("#input-session-ttl", Input).value.strip()
         force_ip = self.query_one("#switch-force-ip", Switch).value
 
         error_label = self.query_one("#error-message", Static)
@@ -460,6 +469,15 @@ class ConfigScreen(WispScreen):
             error_label.update("[!] Port must be an integer.")
             return None
 
+        try:
+            ttl_val = int(ttl_raw)
+            if ttl_val < 0:
+                error_label.update("[!] Session TTL cannot be negative.")
+                return None
+        except ValueError:
+            error_label.update("[!] Session TTL must be an integer.")
+            return None
+
         if not interface:
             error_label.update("[!] WireGuard interface name cannot be empty.")
             return None
@@ -468,7 +486,7 @@ class ConfigScreen(WispScreen):
             error_label.update("[!] DNS servers cannot be empty.")
             return None
 
-        return (timeout_val, port_val, interface, dns1, dns2, force_ip)
+        return (timeout_val, port_val, interface, dns1, dns2, force_ip, ttl_val)
 
     def save_config(self) -> None:
         """Validate the form and, if valid, persist it to ``AppState`` *and*
@@ -482,7 +500,7 @@ class ConfigScreen(WispScreen):
         validated = self._validate_form()
         if validated is None:
             return
-        timeout_val, port_val, interface, dns1, dns2, force_ip = validated
+        timeout_val, port_val, interface, dns1, dns2, force_ip, ttl_val = validated
 
         aws_region = self.query_one("#input-aws-region", Input).value.strip()
         oci_region = self.query_one("#input-oci-region", Input).value.strip()
@@ -496,6 +514,7 @@ class ConfigScreen(WispScreen):
         state.config.wireguard_dns1 = dns1
         state.config.wireguard_dns2 = dns2
         state.config.force_current_ip = force_ip
+        state.config.max_session_ttl_minutes = ttl_val
 
         # Persist to disk: [general] fully, plus just the `region` key of
         # [aws]/[oci]/[gcp] — everything else in those sections (credentials,
@@ -572,6 +591,9 @@ class ConfigScreen(WispScreen):
         ).value = cfg.wireguard_interface
         self.query_one("#input-dns1", Input).value = cfg.wireguard_dns1
         self.query_one("#input-dns2", Input).value = cfg.wireguard_dns2
+        self.query_one("#input-session-ttl", Input).value = str(
+            cfg.max_session_ttl_minutes
+        )
         self.query_one("#switch-force-ip", Switch).value = cfg.force_current_ip
 
         # Also discard any unsaved edits to the provider region fields,
@@ -608,8 +630,8 @@ class ConfigScreen(WispScreen):
         # once the layout settles.
         self.call_after_refresh(self.query_one(".card").scroll_to, y=0, animate=False)
 
-    def _form_values(self) -> tuple[str, str, str, str, str, bool, str, str, str]:
-        """Snapshot the editable form: the six [general] fields and the three
+    def _form_values(self) -> tuple[str, str, str, str, str, bool, str, str, str, str]:
+        """Snapshot the editable form: the seven [general] fields and the three
         per-provider region inputs. The reveal switches are deliberately
         excluded — flipping them is not a config change."""
         return (
@@ -618,6 +640,7 @@ class ConfigScreen(WispScreen):
             self.query_one("#input-wireguard-interface", Input).value.strip(),
             self.query_one("#input-dns1", Input).value.strip(),
             self.query_one("#input-dns2", Input).value.strip(),
+            self.query_one("#input-session-ttl", Input).value.strip(),
             self.query_one("#switch-force-ip", Switch).value,
             self.query_one("#input-aws-region", Input).value.strip(),
             self.query_one("#input-oci-region", Input).value.strip(),

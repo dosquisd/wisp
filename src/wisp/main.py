@@ -100,6 +100,51 @@ def parse_args() -> RuntimeArgs:
         help="Region where the VM will be deployed "
         "(defaults to the provider's configured region).",
     )
+    deploy_parser.add_argument(
+        "--ttl",
+        type=int,
+        default=None,
+        metavar="MINUTES",
+        help="Session TTL watchdog: run `wisp destroy` automatically after "
+        "this many minutes, even if Wisp exits (default: the configured "
+        "[general].max_session_ttl_minutes; 0 disables the watchdog).",
+    )
+    deploy_parser.add_argument(
+        "--wireguard-port",
+        type=int,
+        default=None,
+        metavar="PORT",
+        help="UDP port for the WireGuard tunnel (default: the configured "
+        "[general].wireguard_port; 0 picks a random port).",
+    )
+    deploy_parser.add_argument(
+        "--host",
+        type=str,
+        default=None,
+        metavar="HOST",
+        help="VPS only: the server's public hostname or IP (overrides [vps].host).",
+    )
+    deploy_parser.add_argument(
+        "--ssh-user",
+        type=str,
+        default=None,
+        metavar="USER",
+        help="VPS only: SSH user to connect as (overrides [vps].ssh_user).",
+    )
+    deploy_parser.add_argument(
+        "--ssh-port",
+        type=int,
+        default=None,
+        metavar="PORT",
+        help="VPS only: SSH port (overrides [vps].ssh_port).",
+    )
+    deploy_parser.add_argument(
+        "--ssh-key-path",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="VPS only: path to your SSH private key (overrides [vps].ssh_key_path).",
+    )
 
     destroy_parser = subparsers.add_parser(
         "destroy",
@@ -258,6 +303,9 @@ def _create_provider_with_credentials(provider_option: ProviderEnum):
     elif provider_option == ProviderEnum.GCP:
         creds = resolve_gcp_credentials()
         return PROVIDERS_MAP[provider_option](credentials=creds)
+    elif provider_option == ProviderEnum.VPS:
+        creds = resolve_vps_credentials()
+        return PROVIDERS_MAP[provider_option](credentials=creds)
     else:
         return PROVIDERS_MAP[provider_option]()
 
@@ -312,17 +360,43 @@ def main() -> None:
     )
 
     if command == CommandEnum.DEPLOY:
-        vm_result = provider.deploy_vm(region=region)
+        config = load_wisp_config()
+        if args["wireguard_port"] is not None:
+            config.wireguard_port = max(0, int(args["wireguard_port"]))
+
+        if provider_option == ProviderEnum.VPS:
+            # CLI flags override the TOML [vps] section for this deployment.
+            creds = resolve_vps_credentials()
+            if args["host"]:
+                creds.host = args["host"]
+            if args["ssh_user"]:
+                creds.ssh_user = args["ssh_user"]
+            if args["ssh_port"] is not None:
+                creds.ssh_port = int(args["ssh_port"])
+            if args["ssh_key_path"]:
+                creds.ssh_key_path = args["ssh_key_path"]
+            provider = PROVIDERS_MAP[provider_option](credentials=creds)
+
+        vm_result = provider.deploy_vm(region=region, config=config)
         print(f"Deployed VM:\n{json.dumps(vm_result, indent=2)}")
+        # Optional OS-level TTL watchdog: fires `wisp destroy` even after this
+        # process exits, so a forgotten CLI session cannot bill forever. The
+        # --ttl flag wins over the configured default; 0 keeps it off.
+        ttl_minutes = (
+            args["ttl"] if args["ttl"] is not None else config.max_session_ttl_minutes
+        )
+        if ttl_minutes and ttl_minutes > 0:
+            schedule_ttl_watchdog(provider_option.value, region, ttl_minutes)
         sys.exit(0)
 
     if command == CommandEnum.DESTROY:
+        # Cancel the optional TTL watchdog before/after teardown: best effort,
+        # and harmless if it already fired or was never scheduled.
+        cancel_ttl_watchdog(provider_option.value, region)
         delete_success = provider.delete_vm(region=region)
         # If this destroy matches a session the TUI marked as active, clear the
         # marker: resources are gone, and leaving it would make the next TUI
         # startup offer to "clean up" an orphan that no longer exists.
-        from wisp.session import clear_active_session, read_active_session
-
         active = read_active_session()
         if (
             active is not None

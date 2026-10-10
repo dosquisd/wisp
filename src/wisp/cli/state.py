@@ -6,9 +6,11 @@ from wisp.config.credentials import (
     AWSCredentials,
     GCPCredentials,
     OCICredentials,
+    VPSCredentials,
     resolve_aws_credentials,
     resolve_gcp_credentials,
     resolve_oci_credentials,
+    resolve_vps_credentials,
 )
 from wisp.config.settings import (
     WispConfig,
@@ -42,6 +44,7 @@ class AppState:
         aws_credentials (AWSCredentials): Resolved AWS credentials.
         oci_credentials (OCICredentials): Resolved OCI credentials.
         gcp_credentials (GCPCredentials): Resolved GCP credentials.
+        vps_credentials (VPSCredentials): Resolved VPS connection details.
     """
 
     config: WispConfig = field(default_factory=load_wisp_config)
@@ -52,10 +55,29 @@ class AppState:
     aws_credentials: AWSCredentials = field(default_factory=resolve_aws_credentials)
     oci_credentials: OCICredentials = field(default_factory=resolve_oci_credentials)
     gcp_credentials: GCPCredentials = field(default_factory=resolve_gcp_credentials)
+    vps_credentials: VPSCredentials = field(default_factory=resolve_vps_credentials)
+    session_ttl_minutes: int | None = None
 
     def reset_config(self) -> None:
         """Reset :attr:`config` to a fresh :class:`WispConfig` from TOML."""
         self.config = load_wisp_config()
+
+    def effective_session_ttl(self) -> int:
+        """Return the TTL the deploy should schedule the watchdog with.
+
+        The deploy screen sets :attr:`session_ttl_minutes` explicitly (the
+        switch may disable it with ``0``); before any deploy this session it
+        falls back to the configured default from ``[general]``.
+
+        Args:
+            None.
+
+        Returns:
+            int: TTL in minutes; ``0`` means the watchdog stays off.
+        """
+        if self.session_ttl_minutes is not None:
+            return self.session_ttl_minutes
+        return self.config.max_session_ttl_minutes
 
     def get_credentials_for_provider(self, provider_name: str):
         """Return resolved credentials for the given provider."""
@@ -67,6 +89,8 @@ class AppState:
                 return self.oci_credentials
             case ProviderEnum.GCP:
                 return self.gcp_credentials
+            case ProviderEnum.VPS:
+                return self.vps_credentials
             case _:
                 return None
 
@@ -76,3 +100,4 @@ class AppState:
         self.aws_credentials = resolve_aws_credentials()
         self.oci_credentials = resolve_oci_credentials()
         self.gcp_credentials = resolve_gcp_credentials()
+        self.vps_credentials = resolve_vps_credentials()
