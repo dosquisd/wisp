@@ -38,7 +38,10 @@ from collections.abc import Callable
 from typing import Any
 
 from wisp.config.constants import WISP_ACTIVE_SESSION_PATH
+from wisp.providers import PROVIDERS_MAP, ProviderEnum
 from wisp.utils import logger, secure_file
+from wisp.utils.watchdog import cancel_ttl_watchdog
+from wisp.wireguard import disconnect_wireguard_client
 
 # Teardown callable: receives a short human-readable reason for the shutdown.
 TeardownCallback = Callable[[str], None]
@@ -318,10 +321,16 @@ def teardown_active_session(
         if on_progress is not None:
             on_progress(message, progress)
 
+    # Cancel the optional OS-level TTL watchdog first: teardown is happening
+    # right now, so the scheduled `wisp destroy` must not fire later. Best
+    # effort — a missed cancel is harmless (the destroy is idempotent).
+    try:
+        cancel_ttl_watchdog(provider_name, region)
+    except Exception as exc:
+        logger.debug(f"TTL watchdog cancel skipped: {exc}")
+
     report("Disconnecting the local tunnel...", 0.1)
     try:
-        from wisp.wireguard import disconnect_wireguard_client
-
         response = disconnect_wireguard_client()
         if not response.ok:
             logger.warning(f"Could not bring the local tunnel down: {response.message}")
@@ -329,8 +338,6 @@ def teardown_active_session(
         logger.warning(f"Local tunnel teardown skipped: {exc}")
 
     report("Destroying cloud resources...", 0.4)
-    from wisp.providers import PROVIDERS_MAP, ProviderEnum
-
     provider_cls = PROVIDERS_MAP[ProviderEnum(provider_name)]
     provider_cls().delete_vm(region=region, on_progress=on_progress)
 

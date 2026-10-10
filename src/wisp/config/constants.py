@@ -35,6 +35,9 @@ DEFAULT_TAG = {
 
 DEFAULT_VM_BOOT_TIMEOUT_SECONDS: int = 60
 
+# Default session TTL for the optional OS-level watchdog (1 hour).
+DEFAULT_SESSION_TTL_MINUTES: int = 60
+
 # Project root, derived from this file's location (src/wisp/config/constants.py)
 try:
     ROOTDIR = __project_root()

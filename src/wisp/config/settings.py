@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from wisp.config.constants import (
+    DEFAULT_SESSION_TTL_MINUTES,
     DEFAULT_VM_BOOT_TIMEOUT_SECONDS,
     WIREGUARD_DNS1,
     WIREGUARD_DNS2,
@@ -243,6 +244,7 @@ def save_session_config(
             "wireguard_port": cfg.wireguard_port,
             "force_current_ip": cfg.force_current_ip,
             "confirm_destroy": cfg.confirm_destroy,
+            "max_session_ttl_minutes": cfg.max_session_ttl_minutes,
         }
     )
 
@@ -284,6 +286,12 @@ class WispConfig:
             before tearing the VPN down (``d``/``esc``/the destroy button). The
             ``Don't ask again`` checkbox in that dialog flips it off and
             persists it to ``[general]``.
+        max_session_ttl_minutes (int): Session lifetime cap in minutes used by
+            the optional OS-level watchdog (default: one hour). When greater
+            than zero, deploying schedules an OS-level one-shot that runs
+            ``wisp destroy`` when the TTL expires, so a crashed or forgotten
+            session cannot keep a billable VM running forever. The deploy
+            screen lets the user toggle it per deployment; ``0`` disables it.
     """
 
     vm_boot_timeout: int = DEFAULT_VM_BOOT_TIMEOUT_SECONDS
@@ -295,6 +303,7 @@ class WispConfig:
     wireguard_port: int = 0  # 0 indicates dynamic random port (49152-65535)
     force_current_ip: bool = False
     confirm_destroy: bool = True
+    max_session_ttl_minutes: int = DEFAULT_SESSION_TTL_MINUTES
 
 
 def load_wisp_config() -> WispConfig:
@@ -317,4 +326,7 @@ def load_wisp_config() -> WispConfig:
         wireguard_port=int(general.get("wireguard_port", 0)),
         force_current_ip=bool(general.get("force_current_ip", False)),
         confirm_destroy=bool(general.get("confirm_destroy", True)),
+        max_session_ttl_minutes=int(
+            general.get("max_session_ttl_minutes", DEFAULT_SESSION_TTL_MINUTES)
+        ),
     )
