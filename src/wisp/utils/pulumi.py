@@ -1,6 +1,7 @@
 from pulumi import automation as auto
 
 from wisp.config.constants import PULUMI_PROJECT_NAME, get_pulumi_stack_name
+from wisp.utils.logger import logger
 
 
 def create_or_select_pulumi_stack(
@@ -24,3 +25,106 @@ def create_or_select_pulumi_stack(
     return auto.create_or_select_stack(
         stack_name=stack_name, project_name=project_name, program=program
     )
+
+
+def list_wisp_stacks() -> list[str]:
+    """List every Pulumi stack that belongs to Wisp in the current backend.
+
+    Args:
+        None.
+
+    Returns:
+        list[str]: Stack names (e.g. ``["wisp-stack-aws", ...]``), sorted.
+    """
+    workspace = auto.LocalWorkspace(
+        project_settings=auto.ProjectSettings(
+            name=PULUMI_PROJECT_NAME, runtime="python"
+        )
+    )
+    return sorted(
+        info.name
+        for info in workspace.list_stacks()
+        if info.name.startswith("wisp-stack-")
+    )
+
+
+def stack_resource_counts(stack_name: str) -> dict[str, int]:
+    """Count the real (billable-affecting) resources recorded in a stack state.
+
+    Reads the stack's exported state without running any program, so this is
+    safe against stacks whose program has drifted or whose provider credentials
+    are currently broken.
+
+    Args:
+        stack_name (str): Pulumi stack name (e.g. ``"wisp-stack-aws"``).
+
+    Returns:
+        dict[str, int]: ``{"total": <n>}`` where ``n`` counts every resource
+        except the synthetic ``pulumi:pulumi:Stack`` root.
+    """
+    workspace = auto.LocalWorkspace(
+        project_settings=auto.ProjectSettings(
+            name=PULUMI_PROJECT_NAME, runtime="python"
+        )
+    )
+    deployment = workspace.export_stack(stack_name).deployment
+    resources = deployment.get("resources", []) or []
+    real = [r for r in resources if r.get("type") != "pulumi:pulumi:Stack"]
+    return {"total": len(real)}
+
+
+def refresh_wisp_stack(program: auto.PulumiFn, *, provider: str, region: str) -> bool:
+    """Reconcile a stack's state against reality (``stack.refresh``).
+
+    Resources deleted out-of-band (e.g. a VM removed by hand in the cloud
+    console) stay recorded in the state until a refresh marks them deleted.
+    Refreshing before counting/destroying keeps both truthful.
+
+    Note: the provider's program factory is injected by the caller instead of
+    looked up here — this module must not import ``wisp.providers``, because
+    the provider modules themselves import ``create_or_select_pulumi_stack``
+    from ``wisp.utils`` (lazy attribute), which would close a cycle.
+
+    Args:
+        program (auto.PulumiFn): The provider's program factory
+            (``_create_pulumi_program``); called with ``(region,)``.
+        provider (str): Provider identifier owning the stack (``"aws"``,
+            ``"oci"``, ``"gcp"``); used for the stack name.
+        region (str): Region the stack was deployed in (program input).
+
+    Returns:
+        bool: True when the refresh completed, False when it failed (e.g.
+        broken credentials); never raises.
+    """
+    try:
+        stack = create_or_select_pulumi_stack(
+            lambda: program(region), provider=provider
+        )
+        stack.refresh()
+        return True
+    except Exception as exc:
+        logger.debug(f"Refresh skipped for wisp-stack-{provider}: {exc}")
+        return False
+
+
+def destroy_wisp_stack(program: auto.PulumiFn, *, provider: str, region: str) -> int:
+    """Destroy a wisp stack's resources through the normal provider flow.
+
+    Reuses :func:`create_or_select_pulumi_stack` with the provider's program
+    factory so the destroy behaves exactly like an in-app teardown. The
+    program is injected by the caller (see the cycle note in
+    :func:`refresh_wisp_stack`).
+
+    Args:
+        program (auto.PulumiFn): The provider's program factory
+            (``_create_pulumi_program``); called with ``(region,)``.
+        provider (str): Provider identifier owning the stack (``"aws"``,
+            ``"oci"``, ``"gcp"``); used for the stack name.
+        region (str): Region the stack was deployed in (program input).
+
+    Returns:
+        int: Number of deleted resources.
+    """
+    stack = create_or_select_pulumi_stack(lambda: program(region), provider=provider)
+    result = stack.destroy()
+    return result.summary.resource_changes.get("delete", 0)
