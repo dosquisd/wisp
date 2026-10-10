@@ -21,7 +21,8 @@ back to those constants.
 | `wireguard_dns2` | `str` | `"1.0.0.1"` | Secondary DNS pushed to the client |
 | `wireguard_port` | `int` | `0` | UDP port; `0` means a random port in `49152–65535` |
 | `force_current_ip` | `bool` | `False` | If true, restrict firewall/AllowedIPs to your current public IP (`/32`) |
-| `confirm_destroy` | `bool` | `True` | Ask for confirmation before tearing down the VPN from the tunnel view (`d`/`esc`/the destroy button). The "no volver a preguntar" checkbox in that dialog flips this to `False` and persists it to `[general]` |
+| `confirm_destroy` | `bool` | `True` | Ask for confirmation before tearing down the VPN from the tunnel view (`d`/`esc`/the destroy button). The "Don't ask again" checkbox in that dialog flips this to `False` and persists it to `[general]` |
+| `max_session_ttl_minutes` | `int` | `60` | Session TTL cap for the optional OS-level watchdog (`utils/watchdog.py`): when greater than zero, deploying schedules a timer that runs `wisp destroy` when the TTL expires — it survives TUI/process death. `0` disables the watchdog. The deploy screen toggles it per run; the CLI overrides it with `--ttl` |
 
 The TUI Configuration screen edits these values in memory; the CLI uses the
 TOML-derived defaults (with `force_current_ip` overridable through the provider
@@ -48,6 +49,7 @@ Your current public IP is looked up via `https://api.ipify.org`
 | `PULUMI_PROJECT_NAME` | `"wisp-project"` | Pulumi project |
 | `get_pulumi_stack_name(provider)` | `"wisp-stack-<provider>"` | Provider-specific Pulumi stack (e.g. `wisp-stack-aws`, `wisp-stack-oci`) |
 | `DEFAULT_VM_BOOT_TIMEOUT_SECONDS` | `60` | Default `vm_boot_timeout` |
+| `DEFAULT_SESSION_TTL_MINUTES` | `60` | Default `max_session_ttl_minutes` (watchdog off when `0`) |
 
 ### Paths
 
@@ -153,8 +155,8 @@ not exist.
 
 ## Provider configuration (`wisp.toml`)
 
-Per-provider settings are stored in the `[aws]`, `[oci]`, and `[gcp]` sections
-of `wisp.toml` (the providers supported today; see `ProviderEnum`
+Per-provider settings are stored in the `[aws]`, `[oci]`, `[gcp]`, and `[vps]`
+sections of `wisp.toml` (the providers supported today; see `ProviderEnum`
 ([`src/wisp/providers/base.py`](../src/wisp/providers/base.py)) for the
 current list). These sections are optional; if omitted, the provider SDK uses
 its default credential chain.
@@ -182,6 +184,12 @@ project_id = "my-project-123456"
 region = "us-central1"
 zone = "us-central1-a"
 credentials_path = "/home/user/keys/sa-key.json"
+
+[vps]
+host = "203.0.113.10"
+ssh_user = "root"
+ssh_port = 22
+ssh_key_path = "~/.ssh/id_ed25519"
 ```
 
 The per-field details for each section follow.
@@ -250,3 +258,25 @@ each provider uses its standard CLI/SDK credential chain for authentication:
 > profile (for credential resolution/validation), and `compartment_ocid`
 > (passed to the Pulumi deploy); GCP → everything (all fields are passed to
 > the Pulumi deploy or used by wisp's own SDK calls).
+
+### `[vps]` section
+
+Bring-your-own-server: Wisp configures WireGuard on a Linux host you already
+own, over SSH. Nothing is provisioned — no Pulumi, no cloud API — and on
+cleanup Wisp tears down only the interface it created (named `wisp-<hex>`,
+never your own `wg0`): the tunnel is brought down (which also removes the
+firewall rules the installer added), the config file is deleted, and
+packages are kept. Authentication is public-key based; password
+authentication is not supported.
+
+| Field | Type | Default | Meaning |
+| ------- | ------ | --------- | --------- |
+| `host` | `str` | `""` (required) | The server's public hostname or IP |
+| `ssh_user` | `str` | `"root"` | SSH user to connect as (needs sudo for the installer) |
+| `ssh_port` | `int` | `22` | SSH port |
+| `ssh_key_path` | `str` | `""` (agent/default keys) | Path to YOUR private key — it is used as-is, never generated or deleted |
+
+The host's `authorized_keys` must contain your public key. The TUI deploy
+screen also collects these fields per run (the TOML section only pre-fills
+the form), and the CLI overrides them with `--host`, `--ssh-user`,
+`--ssh-port`, and `--ssh-key-path`.

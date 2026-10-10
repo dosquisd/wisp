@@ -1,18 +1,19 @@
 # Wisp Documentation
 
 Wisp provisions **ephemeral WireGuard VPNs on your own cloud**. It spins up a
-throwaway virtual machine at a cloud provider (currently AWS and OCI), installs
-and configures a WireGuard server on it via Paramiko (SSH/SFTP), connects your
-local machine as a WireGuard client through a privileged daemon, and tears
-everything down again on demand.
+throwaway virtual machine at a cloud provider, installs and configures a
+WireGuard server on it via Paramiko (SSH/SFTP), connects your local machine as
+a WireGuard client through a privileged daemon, and tears everything down
+again on demand. It can also configure WireGuard directly on a VPS you
+already own — no provisioning involved.
 
 Wisp can be driven either through an interactive terminal UI (TUI) or through
 non-interactive CLI subcommands.
 
-> **Note:** As of this writing, Wisp ships with support for `aws`, `oci`, and `gcp`.
-> The provider layer is designed to be extensible — new providers can be added
-> by implementing `BaseProvider` (or extending `PulumiProvider`) and
-> registering them in `PROVIDERS_MAP`
+> **Note:** As of this writing, Wisp ships with support for `aws`, `oci`,
+> `gcp`, and `vps` (bring-your-own-server). The provider layer is designed to
+> be extensible — new providers can be added by implementing `BaseProvider`
+> (or extending `PulumiProvider`) and registering them in `PROVIDERS_MAP`
 > ([`src/wisp/providers/__init__.py`](../src/wisp/providers/__init__.py)).
 > For the current list, see `ProviderEnum`
 > ([`src/wisp/providers/base.py`](../src/wisp/providers/base.py)).

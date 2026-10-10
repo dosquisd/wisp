@@ -41,9 +41,23 @@ The provider abstraction is designed for extension.
    configure the remote server (SSH/SFTP) → connect the local client. See
    [deployment flow](./deployment-flow.md).
 
-The TUI's `DeployScreen` currently declares its provider options inline
-(AWS and OCI); a new provider would also need to be added to that `Select`
-widget.
+Two provider shapes exist today:
+
+- **Pulumi-based** (`aws`, `oci`, `gcp`): extend `PulumiProvider`, implement
+  `_create_pulumi_program(...)` + `get_available_regions()`, and let the
+  shared deploy/destroy flow do the rest. The destroy path cancels any
+  in-flight update before destroying, so your program only needs to declare
+  the infrastructure.
+- **No-provisioning** (`vps`, in `providers/vps.py`): implement `BaseProvider`
+  directly. No Pulumi at all — deploy SSHes into an existing host and runs the
+  installer with a Wisp-namespaced interface name (`wisp-<hex>`), and delete
+  tears down only what Wisp created. Credentials come from a `[vps]` TOML
+  section via `resolve_vps_credentials()`.
+
+The TUI's `DeployScreen` currently declares its provider options inline; a
+new provider also needs an entry in that `Select` widget (and, if it is not
+region-based, a `_get_fallback_regions` branch or a `#vps-fields`-style
+swap of the region step — see how `vps` does it).
 
 ## Documentation
 

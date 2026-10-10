@@ -15,29 +15,44 @@ wisp regions    # CLI: list available regions
 ## CLI subcommands
 
 Every subcommand accepts a positional `provider` argument (default `aws`;
-`aws`, `oci`, and `gcp` today — see `ProviderEnum` for the current list).
+`aws`, `oci`, `gcp`, and `vps` today — see `ProviderEnum` for the current
+list).
 
-> **Note:** Wisp ships with support for `aws`, `oci`, and `gcp` as of this writing, and
-> the provider layer is extensible. For the current list, see `ProviderEnum`
+> **Note:** Wisp ships with support for `aws`, `oci`, `gcp`, and `vps`
+> (bring-your-own-server) as of this writing, and the provider layer is
+> extensible. For the current list, see `ProviderEnum`
 > ([`src/wisp/providers/base.py`](../src/wisp/providers/base.py)) and
 > `PROVIDERS_MAP`
 > ([`src/wisp/providers/__init__.py`](../src/wisp/providers/__init__.py)).
 
 ### `wisp deploy [provider] [-r/--region REGION]`
 
-Provisions a VM and brings the tunnel up.
+Provisions a VM and brings the tunnel up. For `vps`, skips provisioning
+entirely and configures WireGuard on the server you point it at.
 
-- `provider` — cloud provider (`aws`, `oci`, or `gcp`, default `aws`).
+- `provider` — cloud provider (`aws`, `oci`, `gcp`, or `vps`, default `aws`).
 - `-r`, `--region` — target region. If omitted, the region is resolved from
-  the provider configuration in `wisp.toml` (`[aws].region` or `[oci].region`).
-  There is no cross-provider default region.
+  the provider configuration in `wisp.toml` (`[aws].region`, `[oci].region`,
+  or `[gcp].region`). There is no cross-provider default region. Ignored for
+  `vps`.
+- `--ttl MINUTES` — session TTL watchdog: schedules an OS-level timer that
+  runs `wisp destroy` after this many minutes even if Wisp exits (default:
+  `[general].max_session_ttl_minutes`; `0` disables it).
+- `--wireguard-port PORT` — UDP port for the tunnel (default:
+  `[general].wireguard_port`; `0` picks a random port).
+- VPS only: `--host HOST`, `--ssh-user USER`, `--ssh-port PORT`,
+  `--ssh-key-path PATH` — connection overrides for this run (the TOML
+  `[vps]` section is the fallback).
 
 **Examples:**
 
 ```bash
 wisp deploy aws --region eu-west-1
 wisp deploy oci            # uses the default region from [oci] in wisp.toml
-wisp deploy aws -r sa-north-1
+wisp deploy aws -r sa-north-1 --ttl 120
+
+# Bring-your-own-server (no cloud credentials needed):
+wisp deploy vps --host 203.0.113.10 --ssh-user root --ssh-key-path ~/.ssh/id_ed25519
 ```
 
 Prints the deployment result as JSON, e.g.:
@@ -53,9 +68,12 @@ Prints the deployment result as JSON, e.g.:
 
 ### `wisp destroy [provider] [-r/--region REGION]`
 
-Disconnects the local client, destroys the Pulumi stack, and removes local
-artifacts (inventory, key, client config). Prints the number of deleted
-resources:
+Disconnects the local client, destroys the Pulumi stack (cancelling any
+in-flight update first), and removes local artifacts (inventory, key, client
+config). For `vps`, it also tears the tunnel down on the server: every
+`/etc/wireguard/wisp-*.conf` interface is brought down and deleted
+(packages and non-wisp configs are never touched). Prints the number of
+deleted resources:
 
 ```bash
 wisp destroy aws -r eu-west-1
@@ -67,12 +85,32 @@ wisp destroy oci -r sa-bogota-1
 
 ### `wisp regions [provider]`
 
-Lists the regions available for the provider (AWS via `boto3` `describe_regions`
-or OCI via the Identity API). Prints a JSON array.
+Lists the regions available for the provider (AWS via `boto3` `describe_regions`,
+OCI via the Identity API, GCP via the Compute SDK; `vps` returns a
+placeholder). Prints a JSON array.
 
 ```bash
 wisp regions aws
 wisp regions oci
+```
+
+### `wisp gc [--refresh] [--destroy]`
+
+Garbage collection for leftover Pulumi stacks: lists every `wisp-stack-*`
+in the backend, counts the real resources recorded in each stack's exported
+state (no program run — safe even with broken credentials), and reports the
+leftovers.
+
+- `--refresh` — reconciles each stack's state against the cloud first, so
+  resources you deleted out-of-band (e.g. a VM removed by hand in the
+  console) stop counting as leftovers.
+- `--destroy` — destroys every stack that still holds resources (with a
+  best-effort refresh first). Requires working provider credentials.
+
+```bash
+wisp gc                 # report only
+wisp gc --refresh       # reconcile state with reality, then report
+wisp gc --destroy       # tear down every leftover stack
 ```
 
 ## CLI vs TUI behaviour
@@ -86,9 +124,6 @@ wisp regions oci
 
 Argument parsing normalizes `command`, `provider`, and `region` to lowercase. If
 no command is given, it defaults to the TUI.
-
-> Note: the TUI's user-facing strings are currently in Spanish; all
-> documentation and CLI arguments are in English.
 
 ## The TUI
 
@@ -126,51 +161,62 @@ Edits an in-memory `WispConfig` for the session (persisted to the active
 - `wireguard_port` (`0` = random in `49152–65535`, otherwise `0–65535`)
 - `wireguard_interface` (non-empty)
 - Primary / secondary DNS (both non-empty)
+- `max_session_ttl_minutes` (default TTL for the OS-level watchdog; `0` = off)
 - Restrict access to your current public IP only (toggle → `/32` firewall rule)
 
-Validation errors are shown inline. Both *Guardar* and *Restablecer* ask for
-confirmation first: saving opens a "¿Guardar la configuración?" modal (the
-form is validated before the modal appears), and resetting confirms before the
-form is reloaded from `wisp.toml`.
+Validation errors are shown inline. Both *Save* and *Reset* ask for
+confirmation first: saving opens a "Save settings?" modal (the form is
+validated before the modal appears), and resetting confirms before the form
+is reloaded from `wisp.toml`.
 
-Unsaved edits are tracked: a yellow "Hay cambios sin guardar" marker appears
-as soon as a field differs from what was loaded. Leaving via `Escape`/*Volver*
-or pressing *Restablecer* while there are unsaved edits opens the discard
-modal — you can *Guardar* (persist and leave), *Descartar* (revert), or
-*Cancelar* (stay and keep editing). Cancelling any confirmation modal never
-loses edits: the dirty marker stays. The provider credential collapsibles are
-read-only; the "Mostrar valores completos" toggle only reveals them.
+Unsaved edits are tracked: a yellow "Unsaved changes" marker appears as soon
+as a field differs from what was loaded. Leaving via `Escape`/*Back* or
+pressing *Reset* while there are unsaved edits opens the discard modal — you
+can *Save* (persist and leave), *Discard* (revert), or *Cancel* (stay and
+keep editing). Cancelling any confirmation modal never loses edits: the dirty
+marker stays. The provider credential collapsibles are read-only; the "Show
+full values" toggle only reveals them.
 
 ### Deploy screen
 
-- Provider select (`aws`, `oci`, or `gcp`).
-- Region select. On mount, it fetches live regions in a background thread.
+- Provider select (`aws`, `oci`, `gcp`, or `vps`).
+- Region select. On mount, it fetches live regions in a background thread;
+  if the fetch fails (e.g. expired credentials), the Select is repopulated
+  with the provider's standard list instead of keeping another provider's
+  regions. Hidden for `vps`.
+- VPS connection fields (shown only for `vps`): host, SSH user, SSH port,
+  SSH private key path, and WireGuard port (`0` = random). The form is the
+  source of truth for the deployment; the TOML `[vps]` section only pre-fills
+  it.
+- Session TTL watchdog row (switch + minutes) — arms the OS-level timer for
+  this deployment.
 - A summary reflects the current config; "Start Deployment" pushes the
   Progress screen which runs the deployment in a worker thread.
-
-The deploy card fits a 24-row terminal: there is deliberately no scroll, so
-the *Iniciar Despliegue / Cancelar* buttons are always on screen.
 
 ### Progress screen
 
 - Runs `deploy_vm` / `delete_vm` in a worker thread and marshals progress back
   to the UI thread via `call_from_thread`.
+- The session guard is armed before provisioning starts: quitting mid-deploy
+  cancels the in-flight update and destroys partial resources.
 - The progress bar is centred above the status line. During the WireGuard
   install the remote installer's own output is streamed live into the status
   line (throttled to one line per second), so a minutes-long install never
   looks like a hang.
 - On success, shows instance ID, public IP, WireGuard port, and private IP,
   plus a "Destroy VPN" button that runs the destroy flow.
-- On error, shows the exception message.
+- On failure, shows a scrollable error box with the real Pulumi diagnostics
+  (extracted from the command result, not the bare "code: 1") and both
+  "Destroy Resources" and "Back to Menu" buttons — partial resources are
+  billable, so the cleanup path is always available.
 
 ### Tunnel screen
 
 The tunnel view is a terminal state: `q`, `Ctrl+C`, `esc`, `d`, and the
-*Destruir Túnel y Salir* button all tear the VPN down and return to the main
+*Destroy Tunnel and Exit* button all tear the VPN down and return to the main
 menu — there is deliberately no way back to the menu with a live session (a
 tunnel nobody watches is a VM nobody tears down). Because that destroy is
-irreversible, a
-*Confirmation* modal asks first unless `[general].confirm_destroy` is `false`
-— `q` and `Ctrl+C` ask too when a tunnel is live, while on every other screen
-they quit straight away. The dialog's "No volver a preguntar" checkbox turns
-that off and persists it.
+irreversible, a *Confirmation* modal asks first unless
+`[general].confirm_destroy` is `false` — `q` and `Ctrl+C` ask too when a
+tunnel is live, while on every other screen they quit straight away. The
+dialog's "Don't ask again" checkbox turns that off and persists it.

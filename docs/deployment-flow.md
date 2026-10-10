@@ -6,8 +6,19 @@ step to the code that performs it.
 ## Deploy
 
 Entry: `Provider.deploy_vm(region, force_current_ip=False, config=None, on_progress=None)`
-(`providers/pulumi_base.py`, shared by all Pulumi-based providers — `aws` and
-`oci` today; see `ProviderEnum` for the current list).
+(`providers/pulumi_base.py`, shared by all Pulumi-based providers — `aws`,
+`oci`, and `gcp` today; see `ProviderEnum` for the current list). The `vps`
+provider (`providers/vps.py`) skips steps 2–4 entirely: it SSHes straight into
+the user's server and runs the same installer (step 6), using a
+`wisp-<hex>` server-side interface name instead of `wg0`.
+
+**Before provisioning starts**, the Progress screen writes the active-session
+marker and arms the `SessionGuard`: a TUI or console death mid-deploy leaves
+the marker behind and lets the signal handlers cancel the in-flight update
+and destroy partial resources. If `[general].max_session_ttl_minutes > 0`,
+arming the guard also schedules the OS-level TTL watchdog
+(`utils/watchdog.py`). The guard is re-armed unchanged on success and on
+completed failure.
 
 1. **Resolve config.** If `config` is `None`, a `WispConfig` is built from the
    `[general]` TOML section via `load_wisp_config()` (and the `force_current_ip`
@@ -74,8 +85,10 @@ Entry: `Provider.delete_vm(region, on_progress=None)`.
    `DISCONNECT` request; the daemon runs `wg-quick down wg0` (Linux/macOS) or
    the native Windows equivalent.
 
-2. **Destroy infrastructure.** Selects the stack and calls `stack.destroy()`.
-   Errors are logged and cause an early return of `0`.
+2. **Cancel any in-flight update, then destroy infrastructure.** Selects the
+   stack, calls `stack.cancel()` (a no-op when nothing is in flight — this is
+   what lets orphan cleanup tear down a stack whose deploy was interrupted),
+   then `stack.destroy()`. Errors are logged and cause an early return of `0`.
 
 3. **Clean up local artifacts** (if present):
    - `keys/wireguard-key.pem`
@@ -93,10 +106,19 @@ Entry: `Provider.delete_vm(region, on_progress=None)`.
 5. **Return** the number of deleted resources
    (`destroy_result.summary.resource_changes["delete"]`, defaulting to `0`).
 
-Throughout, `on_progress` reports granular phases — "Desconectando el cliente",
-"Destruyendo la infraestructura en el proveedor", "Eliminando claves y
-configuración local", "Recursos destruidos" — so the shutdown screen shows real
-state instead of one frozen message.
+Throughout, `on_progress` reports granular phases — "Disconnecting the local
+tunnel", "Destroying provider infrastructure", "Removing local keys and
+configuration", "Resources destroyed successfully" — so the shutdown screen
+shows real state instead of one frozen message.
+
+**VPS destroy (`VPSProvider.delete_vm`) additionally tears the tunnel down on
+the server.** `remove_wisp_server_configs()`
+(`wireguard/remote_server.py`) SSHes in and, for every
+`/etc/wireguard/wisp-*.conf`: runs `wg-quick down <nic>` (the config's
+`PostDown` rules remove the iptables/firewall rules the installer added),
+runs `systemctl disable --now wg-quick@<nic>`, and deletes the config file.
+Packages are kept — the server may have been using WireGuard before Wisp —
+and any non-wisp config (e.g. the user's own `wg0`) is never touched.
 
 ## Session lifecycle
 
@@ -111,12 +133,13 @@ Every trigger funnels into that same guard, and the first one to fire wins:
 | Trigger | Mechanism |
 |---|---|
 | `q` / `Ctrl+C` on any screen | `WispApp.action_quit` -> `ShutdownScreen` |
-| `esc` / `d` / "Destruir Túnel y Salir" | `TunnelScreen.action_destroy` -> `ShutdownScreen`. Asks first via a confirmation modal unless `[general].confirm_destroy` is `false`; the modal's "no volver a preguntar" checkbox persists that setting. |
+| `esc` / `d` / "Destroy Tunnel and Exit" | `TunnelScreen.action_destroy` -> `ShutdownScreen`. Asks first via a confirmation modal unless `[general].confirm_destroy` is `false`; the modal's "Don't ask again" checkbox persists that setting. |
 | `SIGHUP` | Terminal window closed -> `install_signal_handlers` -> guard |
 | `SIGTERM` | `kill`, supervisor or session manager -> guard |
 | `SIGINT` | Explicit `kill -INT` or shell job control -> guard |
 | Interpreter exit | `atexit` hook (all platforms) |
 | Previous run died | `find_orphaned_session` warns on next startup |
+| TTL expired | OS-level watchdog (`utils/watchdog.py`) runs `wisp destroy <provider> <region>` — this one works even if Wisp is gone |
 
 `ShutdownScreen` owns the actual teardown so the blocking Pulumi destroy shows
 progress instead of freezing the interface. `SessionGuard.shutdown()` is
@@ -152,6 +175,19 @@ events are shared by the process group. On Windows the teardown is driven by
 keybindings and `atexit`. `SIGKILL` cannot be caught on any platform by design;
 the marker file is the mitigation, since it outlives a hard kill and lets the
 next run report the orphaned resources.
+
+## The TTL watchdog
+
+The marker-based mitigations above only trigger on the *next* launch — if
+nobody reopens Wisp, a forgotten VM keeps billing. When
+`[general].max_session_ttl_minutes > 0` (default `60`), deploying schedules an
+OS-level one-shot that belongs to the OS, not to Wisp (`systemd-run --user`
+transient unit on Linux, `schtasks` on Windows) which runs
+`wisp destroy <provider> <region>` when the TTL expires. Manual teardown
+cancels it (best effort); if Wisp dies, the timer fires alone. Scheduling is
+idempotent (cancel-first), so re-arming the session guard reschedules the
+same target cleanly. The deploy screen can toggle it per deployment and the
+CLI overrides it with `--ttl`; `0` keeps it off.
 
 ## Notes on the remote installer
 

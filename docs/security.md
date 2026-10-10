@@ -56,6 +56,21 @@ to the platform adapter for `connect` / `disconnect` / `status`.
 - On destroy, the key file and client config are removed.
 - `keys/*.pem` and `wireguard-confs/*.conf` are gitignored so secrets are not
   committed.
+- **Custom VPS uses YOUR key, not a generated one**: `ssh_key_path` is used
+  as-is to SSH into your server — Wisp never generates, stores, or deletes
+  it. Password authentication is not supported.
+
+## The TTL watchdog
+
+The optional watchdog (`[general].max_session_ttl_minutes`, default `60`)
+schedules an OS-level one-shot (`systemd-run --user` on Linux, `schtasks` on
+Windows) that runs `wisp destroy <provider> <region>` when the TTL expires.
+The command runs under your user account with your cloud credentials and the
+same permission model as a manual destroy — it is exactly `wisp destroy`, not
+a privileged background service. Scheduling is idempotent and manual teardown
+cancels it. Its purpose is to bound the blast radius of a forgotten session:
+without it, a crashed TUI can leave a publicly reachable VM billing
+indefinitely.
 
 ## Firewall exposure
 
@@ -81,6 +96,7 @@ stable.
 | ---------- | ----------- | ------- |
 | User ↔ daemon | Unix socket `0660 root:wisp` (Linux/macOS) or Named Pipe with SIDs (Windows) | Group-gated privileged control |
 | Local ↔ VM | SSH with generated RSA 4096 key | Key stored `0600`/icacls, removed on destroy |
+| Local ↔ user-owned VPS | SSH with the user's own key | Key path from `[vps]`/flags; used as-is, never stored by Wisp |
 | Internet ↔ VM | Cloud security group/list | Optionally pinned to your `/32` |
 | Cloud API | Your cloud credentials/environment | Wisp does not manage credentials; each provider uses its standard CLI/SDK credential chain |
 
@@ -89,4 +105,8 @@ stable.
 - Destroying via `wisp destroy` removes the cloud resources and local secrets;
   the local key is not recoverable afterwards.
 - The default `0.0.0.0/0` ingress means a deployed-but-forgotten VM is publicly
-  reachable. Destroy stacks you no longer use.
+  reachable. Destroy stacks you no longer use (`wisp gc --destroy` collects
+  leftovers).
+- VPS deploys add a WireGuard interface (`wisp-<hex>`) and firewall rules to
+  YOUR server; `wisp destroy vps` removes exactly that interface's config and
+  rules — nothing else on the server.

@@ -1,20 +1,23 @@
 # `wisp.providers`
 
-Cloud provider abstraction with the AWS and OCI implementations.
+Cloud provider abstraction with the AWS, OCI, GCP, and Custom VPS
+implementations.
 
-> **Note:** As of this writing, Wisp ships with support for `aws`, `oci`, and `gcp`.
-> The provider layer is designed to be extensible — new providers can be added
-> by implementing `BaseProvider` (or extending `PulumiProvider`) and
-> registering them in `PROVIDERS_MAP`
+> **Note:** As of this writing, Wisp ships with support for `aws`, `oci`,
+> `gcp`, and `vps` (bring-your-own-server). The provider layer is designed to
+> be extensible — new providers can be added by implementing `BaseProvider`
+> (or extending `PulumiProvider`) and registering them in `PROVIDERS_MAP`
 > ([`src/wisp/providers/__init__.py`](../../src/wisp/providers/__init__.py)).
 > For the current list, see `ProviderEnum`
 > ([`src/wisp/providers/base.py`](../../src/wisp/providers/base.py)).
 
 ## `providers/__init__.py`
 
-- `ProviderEnum(enum.Enum)`: `AWS = "aws"`, `OCI = "oci"`.
+- `ProviderEnum(enum.Enum)`: `AWS = "aws"`, `OCI = "oci"`, `GCP = "gcp"`,
+  `VPS = "vps"`, `UNKNOWN = "unknown"`.
 - `PROVIDERS_MAP: dict[ProviderEnum, type[BaseProvider]]`: maps the enum to the
-  concrete provider class (`{ProviderEnum.AWS: AWSProvider, ProviderEnum.OCI: OCIProvider}`).
+  concrete provider class (`{ProviderEnum.AWS: AWSProvider, ProviderEnum.OCI:
+  OCIProvider, ProviderEnum.GCP: GCPProvider, ProviderEnum.VPS: VPSProvider}`).
 
 ## `providers/base.py` — `BaseProvider` (ABC)
 
@@ -177,3 +180,30 @@ Module-level `_plugins_ready` flag guards `ensure_plugins()`, which installs the
 - `_provider_name` — `"GCP"`.
 - `deploy_vm(...)` / `delete_vm(...)` — shared flow, see
   [deployment flow](../deployment-flow.md).
+
+## `providers/vps.py` — `VPSProvider(BaseProvider)`
+
+Bring-your-own-server: Wisp on a host the user already owns. No Pulumi, no
+cloud API — just SSH. Authentication is public-key based (the host's
+`authorized_keys` must contain the user's public key); password auth is
+deliberately out of scope.
+
+- `credentials` (property) — the resolved `VPSCredentials` (`config/credentials.py`):
+  `host`, `ssh_user`, `ssh_port`, `ssh_key_path`.
+- `get_available_regions()` — a single placeholder (`"vps"`); a user-owned
+  VPS has no provider regions.
+- `deploy_vm(...)` — skips provisioning and boot wait entirely: validates the
+  host and key path, generates a Wisp-namespaced server-side interface name
+  (`wisp-<8 hex>`, within the installer's 16-char limit — a VPS already
+  running its own `wg0` never collides), runs the same installer via
+  `configure_remote_server`, reads the real port back from the downloaded
+  client config, and connects the local client. Returns the host as
+  `instance_id`/`public_ip`.
+- `delete_vm(...)` — tears the tunnel down on BOTH ends:
+  `remove_wisp_server_configs()` SSHes in and for every
+  `/etc/wireguard/wisp-*.conf` runs `wg-quick down` (which also removes the
+  installer's iptables rules), disables the unit, and deletes the config;
+  packages and non-wisp configs (e.g. the user's own `wg0`) are never
+  touched. Then disconnects the local client and removes the downloaded
+  client config. The user's SSH key is never generated or deleted.
+- `_provider_name` — `"Custom VPS"`.

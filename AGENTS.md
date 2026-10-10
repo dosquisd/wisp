@@ -21,9 +21,10 @@ Three cooperating pieces:
 3. **Privileged local daemon** — systemd socket-activated service (Linux) or
    native Windows Service + Named Pipes (Windows)
 
-Supported providers (as of this writing): **AWS**, **OCI**, and **GCP**.
-The provider layer is extensible — new providers implement `BaseProvider`
-(or extend `PulumiProvider`) and register in `PROVIDERS_MAP`. For the current
+Supported providers (as of this writing): **AWS**, **OCI**, **GCP**, and
+**Custom VPS** (bring-your-own-server, no Pulumi). The provider layer is
+extensible — new providers implement `BaseProvider` (or extend
+`PulumiProvider`) and register in `PROVIDERS_MAP`. For the current
 list, see `ProviderEnum`
 ([`src/wisp/providers/base.py`](src/wisp/providers/base.py)) and
 `PROVIDERS_MAP`
@@ -42,14 +43,15 @@ src/wisp/
 │   └── screens/            # MainMenu, Config, Deploy, Progress screens
 ├── config/
 │   ├── settings.py         # TOML loading (user+project merged), WispConfig, per-provider defaults
-│   ├── credentials.py      # Per-provider credential resolution (AWS/OCI/GCP) + validation
+│   ├── credentials.py      # Per-provider credential resolution (AWS/OCI/GCP/VPS) + validation
 │   └── constants.py        # Paths, tags, Pulumi identity, WireGuard defaults
 ├── providers/
 │   ├── base.py             # BaseProvider ABC + ProviderEnum + DeployVMResult
 │   ├── pulumi_base.py      # PulumiProvider: shared deploy/destroy flow for all Pulumi providers
 │   ├── aws/                # AWS implementation (provider, pulumi program, constants)
 │   ├── oci/                # OCI implementation (provider, pulumi program, constants)
-│   └── gcp/                # GCP implementation (provider, pulumi program, constants)
+│   ├── gcp/                # GCP implementation (provider, pulumi program, constants)
+│   └── vps.py              # Custom VPS (bring-your-own-server): SSH-only, no Pulumi
 ├── wireguard/
 │   ├── remote_server.py    # Remote WireGuard server config via Paramiko (SSH/SFTP)
 │   └── local_client.py     # Thin client over the daemon transport
@@ -59,7 +61,8 @@ src/wisp/
 │   ├── adapter.py          # Platform-specific privileged ops (Linux/Windows implemented; macOS NOT)
 │   ├── protocol.py         # Request/Response wire format (newline-delimited JSON)
 │   └── windows_service.py  # Windows Service wrapper (pywin32)
-└── utils/                  # logger, platform detection, RNG, public IP, Pulumi helpers
+└── utils/                  # logger, platform detection, RNG, public IP, Pulumi helpers,
+                            # session TTL watchdog (systemd/schtasks)
 ```
 
 Supporting non-Python assets at the repo root:
@@ -76,11 +79,8 @@ wisp.toml.example                        # Config template (wisp.toml itself is 
 
 ## Conventions (non-negotiable)
 
-- **ALL documentation, docstrings, CLI help strings, and code comments are
-  written in English.** The ONLY exception: the TUI's user-facing strings
-  (`src/wisp/cli/`) are in Spanish **by design** (a separate author owns
-  them and will translate them later) — do not translate them unless the
-  user explicitly asks.
+- **ALL documentation, docstrings, CLI help strings, code comments, and
+  TUI user-facing strings are written in English.**
 - **Docstrings follow PEP 257** with Google-style `Args:` / `Returns:` /
   `Raises:` sections. **Code follows PEP 8** as enforced by Ruff.
 - **Ruff config** (`pyproject.toml`): line length 88, 4-space indent, double
@@ -112,7 +112,7 @@ wisp.toml.example                        # Config template (wisp.toml itself is 
   is esc during an in-flight deploy, which is refused because popping the screen
   would let the resources come up with no guard armed. Manual destroy from the
   tunnel view asks first via `ConfirmDestroyScreen` unless `[general]
-  confirm_destroy = false` (the dialog's "no volver a preguntar" persists it).
+  confirm_destroy = false` (the dialog's "Don't ask again" persists it).
   Signal handlers must exit explicitly (`os._exit(128 + signum)`) after the
   teardown, since installing a handler replaces the signal's default action.
   The active-session marker is cleared by `teardown_active_session()` once
@@ -166,9 +166,34 @@ wisp.toml.example                        # Config template (wisp.toml itself is 
 - **Deploy flow** (shared in `PulumiProvider.deploy_vm`): resolve config →
   `pulumi up` with the provider program → wait `vm_boot_timeout` (default
   60s) → persist RSA key to `keys/wireguard-key.pem` → configure remote
-  server (Paramiko SSH/SFTP) → connect local client (daemon).
-- **Destroy flow**: disconnect client → `stack.destroy()` → remove local
-  artifacts (key + client conf).
+  server (Paramiko SSH/SFTP) → connect local client (daemon). The VPS
+  provider (`VPSProvider.deploy_vm`) skips provisioning/boot-wait entirely:
+  SSH → configure remote server → connect local client.
+- **Destroy flow**: disconnect client → `stack.cancel()` (no-op when nothing
+  is in flight) → `stack.destroy()` → remove local artifacts (key + client
+  conf). VPS destroy additionally tears the tunnel down on the SERVER: every
+  `/etc/wireguard/wisp-*.conf` gets `wg-quick down` (which removes the
+  installer's iptables rules), `systemctl disable`, and deletion — packages
+  and non-wisp configs are never touched.
+- **Session guard is armed BEFORE provisioning starts** (not on success): a
+  TUI/console death mid-deploy leaves the active-session marker behind, and
+  the signal handlers cancel the in-flight update and destroy partial
+  resources. Re-armed unchanged on success and on completed failure.
+- **Failed deploys surface real diagnostics**: Pulumi errors are unwrapped
+  from `exc.command_result.stderr/stdout` (str(exc) alone is "code: 1") and
+  the progress screen shows a scrollable error box with a Destroy Resources
+  button — partial resources are billable.
+- **Session TTL watchdog** (`src/wisp/utils/watchdog.py`, optional): when
+  `[general].max_session_ttl_minutes > 0` (default 60), deploying schedules
+  an OS-level one-shot (`systemd-run --user` on Linux, `schtasks` on
+  Windows) that runs `wisp destroy <provider> <region>` when the TTL
+  expires — it survives TUI/process death. Scheduling is idempotent
+  (cancel-first); teardown and `wisp destroy` cancel it. The deploy screen
+  can toggle it per run (`--ttl` on the CLI).
+- **`wisp gc`** inspects leftover `wisp-stack-*` Pulumi stacks via exported
+  state (no program run), counts real resources, and with `--destroy` tears
+  them down. `--refresh` reconciles state against the cloud first, so
+  out-of-band deletions stop counting as leftovers.
 
 ## Provider-specific notes
 

@@ -27,13 +27,15 @@ src/wisp/
 │   └── screens/        # MainMenu, Config, Deploy, Progress, Tunnel, Shutdown screens
 ├── config/             # Configuration
 │   ├── settings.py     # TOML loading, WispConfig dataclass, per-provider defaults
-│   ├── credentials.py  # Per-provider credential resolution (AWS/OCI)
+│   ├── credentials.py  # Per-provider credential resolution (AWS/OCI/GCP/VPS)
 │   └── constants.py    # Paths, tags, WireGuard defaults
 ├── providers/          # Cloud provider abstraction
 │   ├── base.py         # BaseProvider ABC + result TypedDicts
 │   ├── pulumi_base.py  # PulumiProvider: shared deploy/destroy flow
 │   ├── aws/            # AWS implementation (provider, pulumi program, constants)
-│   └── oci/            # OCI implementation (provider, pulumi program, constants)
+│   ├── oci/            # OCI implementation (provider, pulumi program, constants)
+│   ├── gcp/            # GCP implementation (provider, pulumi program, constants)
+│   └── vps.py          # Custom VPS (bring-your-own-server): SSH-only, no Pulumi
 ├── wireguard/          # Client/server WireGuard orchestration
 │   ├── local_client.py # Talks to the daemon over the Unix socket / Named Pipe
 │   └── remote_server.py# Configures the remote server via Paramiko (SSH/SFTP)
@@ -43,7 +45,8 @@ src/wisp/
 │   ├── adapter.py      # Platform-specific privileged operations
 │   ├── protocol.py     # Request/Response wire format + socket path
 │   └── windows_service.py # Windows Service wrapper (pywin32)
-└── utils/              # Helpers: logging, platform detection, RNG, public IP
+└── utils/              # Helpers: logging, platform detection, RNG, public IP,
+                        # Pulumi helpers (gc), session TTL watchdog
 ```
 
 Supporting non-Python assets at the repository root:
@@ -79,8 +82,10 @@ the interface up.
 
 ```text
 User → TUI/CLI
+  → Progress screen: write active-session marker + arm SessionGuard
+      (+ schedule TTL watchdog if max_session_ttl_minutes > 0)
   → Provider.deploy_vm(region, config)
-      → Pulumi Automation: create_or_select_stack(program).up()
+      → Pulumi Automation: create_or_select_stack(program).up()     [aws/oci/gcp]
           program = create_ec2_instance / create_oci_instance / create_gcp_instance(...)
             - AMI/image lookup (most recent Ubuntu image)
             - security rules (UDP wg port + TCP 22)
@@ -96,6 +101,9 @@ User → TUI/CLI
       → connect_wireguard_client(conf_text)
             → daemon: write config (0600) + `wg-quick up wg0`
   → returns DeployVMResult(instance_id, public_ip, private_ip, wireguard_port)
+
+  VPS provider: no Pulumi, no boot wait — SSH straight into the user's server
+  and run the same installer (server-side interface named wisp-<hex>).
 ```
 
 ## End-to-end data flow (destroy)
@@ -104,9 +112,13 @@ User → TUI/CLI
 User → TUI/CLI
   → Provider.delete_vm(region)
       → disconnect_wireguard_client()  → daemon: `wg-quick down wg0`
-      → Pulumi Automation: stack.destroy()
+      → Pulumi Automation: stack.cancel() (no-op if idle) → stack.destroy()
       → remove local artifacts: keys/wireguard-key.pem, wireguard-confs/wg0-client.conf
   → returns count of deleted resources
+
+  VPS provider: additionally SSHes in and tears down every /etc/wireguard/
+  wisp-*.conf (wg-quick down + disable + rm); packages and non-wisp configs
+  are never touched. Then cancels the TTL watchdog and clears the marker.
 ```
 
 ## Provider abstraction
@@ -125,7 +137,9 @@ name (`"aws"`, `"oci"`) to its concrete class. Adding a new provider means
 implementing `BaseProvider` (or extending `PulumiProvider`) and registering it
 in `PROVIDERS_MAP`. See [Contributing](./contributing.md).
 
-> **Note:** As of this writing, Wisp ships with support for `aws`, `oci`, and `gcp`.
+> **Note:** As of this writing, Wisp ships with support for `aws`, `oci`,
+> `gcp`, and `vps`. The Pulumi-based providers share `PulumiProvider`; the
+> `vps` provider implements `BaseProvider` directly (SSH-only, no Pulumi).
 > The provider layer is designed to be extensible — new providers can be added
 > by implementing `BaseProvider` (or extending `PulumiProvider`) and
 > registering them in `PROVIDERS_MAP`

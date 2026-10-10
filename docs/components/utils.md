@@ -21,6 +21,43 @@ Shared helpers. `utils/__init__.py` re-exports the common ones and uses module
   — wraps `pulumi.automation.create_or_select_stack` with a provider-specific
   stack name via `get_pulumi_stack_name(provider)` (e.g. `wisp-stack-aws`,
   `wisp-stack-oci`).
+- `list_wisp_stacks() -> list[str]` — every `wisp-stack-*` stack in the
+  current backend (no program run).
+- `stack_resource_counts(stack_name) -> dict[str, int]` — counts real
+  resources (everything except the synthetic `pulumi:pulumi:Stack` root) from
+  the stack's exported state; safe against broken credentials or drifted
+  programs.
+- `refresh_wisp_stack(program, *, provider, region) -> bool` — reconciles a
+  stack's state against the cloud (`stack.refresh()`); never raises, returns
+  `False` on failure.
+- `destroy_wisp_stack(program, *, provider, region) -> int` — destroys a
+  stack through the normal provider flow; returns the deleted-resource count.
+
+> **Cycle note:** this module must NOT import `wisp.providers` at module
+> level — the provider modules import `create_or_select_pulumi_stack` from
+> `wisp.utils` (lazily via `utils/__init__.__getattr__`), which would close
+> an import cycle. The gc callers inject the provider's program factory
+> instead (see `_program_for` in `main.py`).
+
+## `utils/watchdog.py`
+
+Session TTL watchdog: schedules an OS-level one-shot that runs
+`wisp destroy <provider> <region>` when the session TTL expires, so a
+forgotten session cannot keep a billable VM running after Wisp exits.
+
+- `schedule_ttl_watchdog(provider, region, ttl_minutes) -> str | None` —
+  schedules the timer (best effort: failures are logged and return `None`,
+  never raised). Idempotent: cancels any pending timer for the same target
+  first (re-arming the session guard schedules the same name again).
+- `cancel_ttl_watchdog(provider, region)` — cancels the timer (best effort,
+  safe when nothing was scheduled or it already fired).
+- `get_watchdog_task_name(provider, region) -> str` — deterministic name
+  (`wisp-ttl-<provider>-<region>`) so any process can cancel the same timer.
+- `watchdog_available() -> bool` — whether the platform scheduler binary is
+  reachable.
+
+Platform schedulers: `systemd-run --user` (Linux, transient one-shot unit) and
+`schtasks /SC ONCE` (Windows). Other platforms log-and-skip.
 
 ## `utils/platform.py`
 

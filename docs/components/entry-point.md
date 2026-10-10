@@ -4,8 +4,10 @@ File: `src/wisp/main.py`. Console script: `wisp = "wisp.main:main"`.
 
 ## Types
 
-- `CommandEnum(StrEnum)`: `TUI`, `DEPLOY`, `DESTROY`, `REGIONS`.
-- `RuntimeArgs(TypedDict)`: `{command: CommandEnum, provider: ProviderEnum | None, region: str | None}`.
+- `CommandEnum(StrEnum)`: `TUI`, `DEPLOY`, `DESTROY`, `REGIONS`, `GC`.
+- `RuntimeArgs(TypedDict)`: `{command, provider, region, gc_destroy,
+  gc_refresh, ttl_minutes, wireguard_port, host, ssh_user, ssh_port,
+  ssh_key_path}`.
 
 ## `parse_args() -> RuntimeArgs`
 
@@ -13,31 +15,52 @@ Builds an argparse parser:
 
 - A shared `provider_parser` with an optional positional `provider` (choices
   from `ProviderEnum`, default from `get_default_provider()`).
-- Subcommands: `deploy` and `destroy` (each with `-r/--region`, default `None`
-  — the region is resolved from the provider's configured credentials) and
-  `regions`.
+- Subcommands:
+  - `deploy` — `-r/--region`, `--ttl MINUTES` (session TTL watchdog override),
+    `--wireguard-port PORT`, and VPS-only connection overrides `--host`,
+    `--ssh-user`, `--ssh-port`, `--ssh-key-path`.
+  - `destroy` — `-r/--region`.
+  - `regions`.
+  - `gc` — `--destroy` (tear down leftover stacks) and `--refresh`
+    (reconcile state with the cloud before reporting).
 
 Normalizes `command`, `provider`, and `region` to lowercase. If no subcommand is
 given, `command` defaults to `CommandEnum.TUI`.
 
 ## `_create_provider_with_credentials(provider) -> BaseProvider`
 
-Resolves the provider credentials first (`resolve_aws_credentials()` or
-`resolve_oci_credentials()`) and instantiates the provider from
+Resolves the provider credentials first (`resolve_aws_credentials()`,
+`resolve_oci_credentials()`, `resolve_gcp_credentials()`, or
+`resolve_vps_credentials()`) and instantiates the provider from
 `PROVIDERS_MAP` with them.
+
+## `_run_gc(destroy, refresh)`
+
+Leftover-stack garbage collection: lists `wisp-stack-*` stacks
+(`list_wisp_stacks`), counts real resources per stack via exported state
+(`stack_resource_counts` — no program run), optionally refreshes each stack
+against the cloud first (`refresh_wisp_stack`), and with `--destroy` calls
+`destroy_wisp_stack` per leftover. `_program_for(provider)` builds the
+provider's Pulumi program factory — `utils/pulumi.py` must not import
+`wisp.providers` (see the cycle note there), so the caller injects it.
 
 ## `main() -> None`
 
 Dispatch:
 
+- `GC`: run `_run_gc(destroy, refresh)` and exit.
 - `TUI`: run `WispApp().run()` and exit `0`.
 - Otherwise: raise the console log handler to `DEBUG`, assert a provider is
   present, and instantiate it with resolved credentials.
   - `REGIONS`: print `provider.get_available_regions()` as JSON.
-  - `DEPLOY`/`DESTROY`: if no region was passed, resolve it from
-    `provider.credentials.region` (the provider's configured region), then call
-    `provider.deploy_vm(region=...)` or `provider.delete_vm(region=...)` and
-    print the result.
+  - `DEPLOY`: build a `WispConfig` (`load_wisp_config()`), apply
+    `--wireguard-port` when given, and for `vps` overlay the CLI connection
+    flags onto the resolved credentials; call `provider.deploy_vm(...)` and
+    print the result as JSON. Then, if the TTL is enabled (the `--ttl` flag
+    wins over the config), schedule the OS-level watchdog.
+  - `DESTROY`: cancel the TTL watchdog, call `provider.delete_vm(...)`, and
+    clear the active-session marker when it matches the destroyed
+    provider/region.
 
 The `assert` statements are defensive; argparse guarantees a provider in
 practice, and the region falls back to the provider configuration.
