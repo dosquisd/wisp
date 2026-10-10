@@ -118,9 +118,7 @@ class PulumiProvider(BaseProvider, ABC):
             force_current_ip = config.force_current_ip
 
         if on_progress:
-            on_progress(
-                self._get_progress_prefix("Provisioning infrastructure"), 0.05
-            )
+            on_progress(self._get_progress_prefix("Provisioning infrastructure"), 0.05)
 
         logger.debug("Creating and deploying Pulumi stack...")
         stack = create_or_select_pulumi_stack(
@@ -254,6 +252,15 @@ class PulumiProvider(BaseProvider, ABC):
             provider=self._provider_name.lower(),
         )  # type: ignore
 
+        # If an update is still in flight (e.g. the TUI died mid-deploy and
+        # the orphan cleanup is destroying the leftovers), destroy would fail
+        # on the backend's update lock. Cancel is a no-op when nothing runs.
+        try:
+            logger.debug("Cancelling any in-flight Pulumi operation...")
+            stack.cancel()
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"Pulumi cancel skipped: {e}")
+
         if on_progress:
             on_progress("Destroying provider infrastructure...", 0.4)
         logger.debug("Destroying Pulumi stack...")
@@ -278,6 +285,6 @@ class PulumiProvider(BaseProvider, ABC):
             )
 
         if on_progress:
-            on_progress("Recursos destruidos exitosamente.", 1.0)
+            on_progress("Resources destroyed successfully.", 1.0)
 
         return destroy_result.summary.resource_changes.get("delete", 0)  # type: ignore
