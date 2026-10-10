@@ -9,12 +9,14 @@ from wisp.providers.aws import AWSProvider
 from wisp.providers.base import BaseProvider, ProviderEnum, get_provider_enum
 from wisp.providers.gcp import GCPProvider
 from wisp.providers.oci import OCIProvider
+from wisp.providers.vps import VPSProvider
 
 __all__ = [
     "PROVIDERS_MAP",
     "AWSProvider",
     "GCPProvider",
     "OCIProvider",
+    "VPSProvider",
     "BaseProvider",
     "ProviderEnum",
     "get_provider_enum",
@@ -25,4 +27,5 @@ PROVIDERS_MAP: dict[ProviderEnum, type[BaseProvider]] = {
     ProviderEnum.AWS: AWSProvider,
     ProviderEnum.OCI: OCIProvider,
     ProviderEnum.GCP: GCPProvider,
+    ProviderEnum.VPS: VPSProvider,
 }

@@ -95,3 +95,25 @@
 # Default zone for GCP deployments. If empty, derived as "{region}-a".
 # e.g. "us-central1-a", "us-central1-f".
 # zone = ""
+
+
+[vps]
+# Bring-your-own-server: Wisp configures WireGuard on a Linux host you already
+# own, over SSH. Nothing is provisioned. On cleanup, Wisp tears down only the
+# interface it created (named wisp-<hex>, never your own wg0): the tunnel is
+# brought down, its config file deleted, and the firewall rules it added are
+# removed — packages are kept. Authentication is public-key based: the
+# host's authorized_keys must contain your public key (password auth is not
+# supported).
+
+# REQUIRED. The server's public hostname or IP.
+# host = "203.0.113.10"
+
+# SSH user to connect as (needs sudo for the WireGuard installer).
+# ssh_user = "root"
+
+# SSH port.
+# ssh_port = 22
+
+# Path to YOUR private key. If empty, your SSH agent/default keys are used.
+# ssh_key_path = "~/.ssh/id_ed25519"

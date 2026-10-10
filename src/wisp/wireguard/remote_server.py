@@ -15,6 +15,157 @@ from wisp.schemas import InventoryContext
 from wisp.utils import logger
 
 
+def _connect_ssh(
+    ssh_user: str, instance_ip: str, ssh_key_file: str
+) -> paramiko.SSHClient:
+    """Open an SSH connection to a server, authenticated by public key.
+
+    Tries to load the private key as Ed25519, ECDSA, then RSA (OpenSSH or
+    PKCS#8). When ``ssh_key_file`` is empty, connects without an explicit key
+    so Paramiko falls back to the SSH agent and default key locations.
+
+    Args:
+        ssh_user (str): User to connect as.
+        instance_ip (str): Server hostname or IP.
+        ssh_key_file (str): Path to the user's private key, or ``""`` for
+            agent/default-key authentication.
+
+    Returns:
+        paramiko.SSHClient: The connected client; the caller owns it.
+
+    Raises:
+        paramiko.SSHException: When the key cannot be loaded or the
+            connection fails.
+    """
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    key = None
+    if ssh_key_file:
+        for key_class in (
+            paramiko.Ed25519Key,
+            paramiko.ECDSAKey,
+            paramiko.RSAKey,
+        ):
+            try:
+                key = key_class.from_private_key_file(str(ssh_key_file))
+                logger.debug(f"Loaded SSH key as {key_class.__name__}")
+                break
+            except paramiko.SSHException:
+                continue
+        if key is None:
+            raise paramiko.SSHException(
+                f"Unable to load private key from {ssh_key_file}. "
+                "Supported formats: Ed25519, ECDSA, RSA (OpenSSH or PKCS#8)"
+            )
+
+    try:
+        ssh.connect(
+            hostname=instance_ip,
+            username=ssh_user,
+            pkey=key,
+            timeout=30,
+            banner_timeout=30,
+            auth_timeout=30,
+        )
+    except Exception:
+        ssh.close()
+        raise
+    logger.debug(f"SSH connection established to {ssh_user}@{instance_ip}")
+    return ssh
+
+
+def _run_remote(ssh: paramiko.SSHClient, command: str) -> tuple[int, str, str]:
+    """Run a command on the server and return its exit status and output.
+
+    Args:
+        ssh (paramiko.SSHClient): The connected SSH client.
+        command (str): Shell command to execute.
+
+    Returns:
+        tuple[int, str, str]: Exit status, stdout, and stderr.
+    """
+    _, stdout, stderr = ssh.exec_command(command)
+    exit_status = stdout.channel.recv_exit_status()
+    return exit_status, stdout.read().decode(), stderr.read().decode()
+
+
+def remove_wisp_server_configs(
+    ssh_user: str,
+    instance_ip: str,
+    ssh_key_file: str = "",
+    on_progress: Callable[[str, float | None], None] | None = None,
+) -> bool:
+    """Tear down every Wisp-created WireGuard interface on a remote server.
+
+    Wisp names its server-side interfaces ``wisp-<hex>``, so only files
+    matching ``/etc/wireguard/wisp-*.conf`` are touched — a pre-existing
+    ``wg0.conf`` (or any non-Wisp config) is left alone. For each match the
+    interface is brought down first: ``wg-quick down`` runs the config's
+    ``PostDown`` rules, which removes the iptables/firewall rules the
+    installer added. Packages are intentionally kept — the server may have
+    been using WireGuard before Wisp.
+
+    Args:
+        ssh_user (str): User to connect as (needs sudo/root).
+        instance_ip (str): Server hostname or IP.
+        ssh_key_file (str): Path to the user's private key, or ``""`` for
+            agent/default-key authentication.
+        on_progress (Callable[[str, float | None], None] | None): Optional
+            progress callback.
+
+    Returns:
+        bool: True when the cleanup ran (even with zero matches); False when
+        the SSH connection or the cleanup commands failed.
+    """
+
+    def _report(message: str, progress: float | None = None) -> None:
+        if on_progress is not None:
+            on_progress(message, progress)
+
+    _report("Connecting to server over SSH...")
+    try:
+        ssh = _connect_ssh(ssh_user, instance_ip, ssh_key_file)
+    except Exception as exc:
+        logger.warning(f"Could not SSH to {instance_ip} for cleanup: {exc}")
+        _report(f"Server cleanup skipped (SSH failed): {exc}", 1.0)
+        return False
+
+    try:
+        _report("Removing Wisp WireGuard config from the server...", 0.6)
+        # Glob our configs: the pattern only matches Wisp-created files.
+        # "echo" + glob keeps this POSIX-shell safe (no ls parsing).
+        _, listing = _run_remote(ssh, "echo /etc/wireguard/wisp-*.conf")
+        listing = listing.strip()
+        nics = []
+        if listing and "*" not in listing:
+            nics = [
+                path.removeprefix("/etc/wireguard/").removesuffix(".conf")
+                for path in listing.splitlines()
+                if path.strip()
+            ]
+
+        for nic in nics:
+            logger.info(f"Tearing down Wisp interface '{nic}' on {instance_ip}")
+            # Best effort per interface: a missing/failed step for one config
+            # must not stop the rest of the cleanup.
+            _run_remote(ssh, f"wg-quick down {nic} 2>/dev/null || true")
+            _run_remote(
+                ssh,
+                f"systemctl disable --now wg-quick@{nic} 2>/dev/null || true",
+            )
+            _run_remote(ssh, f"rm -f /etc/wireguard/{nic}.conf")
+
+        if nics:
+            _report(f"Removed {len(nics)} Wisp interface(s) from the server.", 0.9)
+        else:
+            _report("No Wisp interfaces found on the server.", 0.9)
+        return True
+    finally:
+        ssh.close()
+        logger.debug("SSH connection closed")
+
+
 def configure_remote_server(
     inventory_context: InventoryContext,
     on_progress: Callable[[str, float | None], None] | None = None,
@@ -77,40 +228,10 @@ def configure_remote_server(
         "SKIP_CLIENT_CREATION": wireguard_skip_client,
     }
 
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    _report("Connecting to server over SSH...")
+    ssh = _connect_ssh(ssh_user, instance_ip, str(ssh_key_file) if ssh_key_file else "")
+    _report("Connected to server over SSH.")
 
     try:
-        # Connect via SSH using the private key (try multiple key types for PKCS#8/OpenSSH)
-        key = None
-        for key_class in (
-            paramiko.Ed25519Key,
-            paramiko.ECDSAKey,
-            paramiko.RSAKey,
-        ):
-            try:
-                key = key_class.from_private_key_file(str(ssh_key_file))
-                logger.debug(f"Loaded SSH key as {key_class.__name__}")
-                break
-            except paramiko.SSHException:
-                continue
-        if key is None:
-            raise paramiko.SSHException(
-                f"Unable to load private key from {ssh_key_file}. "
-                "Supported formats: Ed25519, ECDSA, RSA (OpenSSH or PKCS#8)"
-            )
-
-        ssh.connect(
-            hostname=instance_ip,
-            username=ssh_user,
-            pkey=key,
-            timeout=30,
-            banner_timeout=30,
-            auth_timeout=30,
-        )
-        logger.debug(f"SSH connection established to {ssh_user}@{instance_ip}")
-
         # Upload the install script via SFTP
         _report("Uploading WireGuard installer to the server...")
         sftp = ssh.open_sftp()

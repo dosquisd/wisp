@@ -417,12 +417,12 @@ def _load_google_credentials(creds: GCPCredentials):
        metadata server.
     """
     if creds.credentials_path:
+        import json
+
         from google.auth.transport.requests import Request as AuthRequest
         from google.oauth2 import service_account
 
         try:
-            import json
-
             with open(creds.credentials_path) as f:
                 key_type = json.load(f).get("type", "")
         except OSError, ValueError, json.JSONDecodeError:
@@ -453,3 +453,51 @@ def _load_google_credentials(creds: GCPCredentials):
 
     resolved, _ = google.auth.default()
     return resolved
+
+
+# ─── VPS (bring-your-own-server) Credentials ─────────────────────
+
+
+@dataclass
+class VPSCredentials(BaseCredentials):
+    """Connection details for a user-provided VPS.
+
+    The user already owns the server, so there is nothing to provision and
+    nothing to destroy: only SSH access matters. Authentication is
+    public-key based (the server's ``authorized_keys`` must contain the user's
+    public key); password authentication is deliberately out of scope.
+    """
+
+    host: str = ""
+    ssh_user: str = "root"
+    ssh_port: int = 22
+    ssh_key_path: str = ""
+
+    @property
+    def region(self) -> str:  # pyright: ignore[reportIncompatibleVariableOverride]
+        """Placeholder region so CLI flows that read ``credentials.region``
+        keep working (a user-owned VPS has no provider regions)."""
+        return "vps"
+
+    def is_explicitly_configured(self) -> bool:
+        """Return True when a host is set in the TOML ``[vps]`` section."""
+        return bool(self.host)
+
+
+def resolve_vps_credentials() -> VPSCredentials:
+    """Resolve VPS connection details from the TOML ``[vps]`` section.
+
+    Args:
+        None.
+
+    Returns:
+        VPSCredentials: Host/user/port/key path; empty host when unset.
+    """
+    toml_config = load_toml_config()
+    vps_toml = toml_config.get("vps", {})
+    return VPSCredentials(
+        host=str(vps_toml.get("host", "")),
+        ssh_user=str(vps_toml.get("ssh_user", "root")),
+        ssh_port=int(vps_toml.get("ssh_port", 22)),
+        ssh_key_path=str(vps_toml.get("ssh_key_path", "")),
+    )

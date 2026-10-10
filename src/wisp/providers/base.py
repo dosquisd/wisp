@@ -25,6 +25,7 @@ class ProviderEnum(enum.Enum):
     AWS = "aws"
     OCI = "oci"
     GCP = "gcp"
+    VPS = "vps"
     UNKNOWN = "unknown"
 
 
