@@ -476,7 +476,12 @@ def main() -> None:
             and active.region == region
         ):
             clear_active_session()
-        print(f"Deleted VM. Count: {delete_success}")
+        if provider_option == ProviderEnum.VPS:
+            # Nothing is deleted on the VPS: the tunnel is torn down on both
+            # ends and Wisp's own configs are removed.
+            print("VPN tunnel removed (client disconnected, server configs cleaned).")
+        else:
+            print(f"Deleted VM. Count: {delete_success}")
         sys.exit(0)
 
 
