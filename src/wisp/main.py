@@ -79,7 +79,11 @@ def parse_args() -> RuntimeArgs:
         "provider",
         nargs="?",
         type=str,
-        choices=[provider.value for provider in ProviderEnum],
+        choices=[
+            provider.value
+            for provider in ProviderEnum
+            if provider != ProviderEnum.UNKNOWN
+        ],
         default=default_provider,
         help="Cloud provider to use (default %(default)s).",
     )
@@ -383,7 +387,9 @@ def main() -> None:
         # process exits, so a forgotten CLI session cannot bill forever. The
         # --ttl flag wins over the configured default; 0 keeps it off.
         ttl_minutes = (
-            args["ttl"] if args["ttl"] is not None else config.max_session_ttl_minutes
+            args["ttl_minutes"]
+            if args["ttl_minutes"] is not None
+            else config.max_session_ttl_minutes
         )
         if ttl_minutes and ttl_minutes > 0:
             schedule_ttl_watchdog(provider_option.value, region, ttl_minutes)
