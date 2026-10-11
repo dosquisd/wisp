@@ -275,26 +275,26 @@ def configure_remote_server(
                 ).strip()
                 if not line:
                     continue
-                logger.debug(line)
+                # Kept in memory for the failure message below; raw lines are
+                # deliberately NOT logged — they are pure apt progress noise.
+                seen_lines.append(line)
                 now = time.monotonic()
                 if now - last_report >= 1.0:
                     last_report = now
                     _report(line, None)
 
+        seen_lines: list[str] = []
         _stream_installer_output()
         exit_status = stdout.channel.recv_exit_status()
-        stdout_text = stdout.read().decode()
         stderr_text = stderr.read().decode()
 
-        if stdout_text:
-            logger.debug(f"Remote stdout:\n{stdout_text}")
-        if stderr_text:
-            logger.warning(f"Remote stderr:\n{stderr_text}")
-
         if exit_status != 0:
+            # Keep the last lines around: they usually carry the actual
+            # apt/shell error when the install fails.
+            tail = "\n".join(seen_lines[-30:])
             raise RuntimeError(
                 f"WireGuard installation script failed with exit code {exit_status}. "
-                f"Stderr: {stderr_text}"
+                f"Stderr: {stderr_text}\nLast installer output:\n{tail}"
             )
 
         logger.info("WireGuard server installation completed successfully")
