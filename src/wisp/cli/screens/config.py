@@ -413,10 +413,15 @@ class ConfigScreen(WispScreen):
         """Ask before persisting the form to ``wisp.toml``.
 
         Validation runs first so an invalid form never opens the modal — it
-        shows the inline error instead. Cancelling the modal keeps every
-        current edit (the dirty state must survive the modal closing).
+        shows the inline error instead. A clean form (no edits since the last
+        save/load) has nothing to persist, so it notifies instead of asking.
+        Cancelling the modal keeps every current edit (the dirty state must
+        survive the modal closing).
         """
         if self._validate_form() is None:
+            return
+        if not self._is_dirty():
+            self.notify("No changes to save.", severity="information")
             return
         self._preserve_dirty = self._is_dirty()
         self.app.push_screen(
@@ -689,25 +694,17 @@ class ConfigScreen(WispScreen):
         self._refresh_dirty_state()
 
     def _request_reset(self) -> None:
-        """Reset always confirms. With unsaved edits the existing
-        discard modal asks first (save/discard/cancel); when clean, a direct
-        confirm modal guards the reload from ``wisp.toml``."""
+        """Reset always confirms when there are edits. With unsaved edits the
+        existing discard modal asks first (save/discard/cancel); when the form
+        is clean there is nothing to reload, so it notifies instead of
+        confirming."""
         if self._is_dirty():
             self._confirm_unsaved(action="reset")
             return
-        self.app.push_screen(
-            ConfirmActionScreen(
-                title="Reset settings?",
-                body="Unsaved edits will be discarded and the form reloaded\n"
-                "from wisp.toml.",
-                confirm_label="Reset",
-            ),
-            self._on_reset_choice,
+        self.notify(
+            "Nothing to reset — the form already matches wisp.toml.",
+            severity="information",
         )
-
-    def _on_reset_choice(self, confirmed: bool | None) -> None:
-        if confirmed:
-            self.reset_config()
 
     def action_back(self) -> None:
         if self._is_dirty():
