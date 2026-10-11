@@ -8,6 +8,7 @@ from textual.widgets import Button, Footer, Header, Input, Label, Select, Static
 
 from wisp.cli.screens.base import WispScreen
 from wisp.cli.screens.progress import ProgressScreen
+from wisp.config.settings import get_default_region_for
 from wisp.providers import PROVIDERS_MAP, ProviderEnum
 from wisp.providers.base import get_provider_display_name
 from wisp.providers.vps import VPS_PLACEHOLDER_REGION
@@ -277,6 +278,30 @@ class DeployScreen(WispScreen):
             return [VPS_PLACEHOLDER_REGION]
         return FALLBACK_AWS_REGIONS
 
+    def _preferred_region(self, provider_val: str, regions: list[str]) -> str:
+        """Pick the region the Select should pre-select for a provider.
+
+        Mirrors the initial pre-selection (provider's configured default from
+        ``[<provider>].region`` in ``wisp.toml``) so switching providers keeps
+        landing on the region the user actually deploys to, instead of the
+        first list entry. Falls back to keeping a still-valid selection, then
+        to the first region.
+
+        Args:
+            provider_val (str): Provider identifier the regions belong to.
+            regions (list[str]): The available regions for that provider.
+
+        Returns:
+            str: The region to pre-select.
+        """
+        default_region = get_default_region_for(provider_val)
+        if default_region and default_region in regions:
+            return default_region
+        region_select = self.query_one("#select-region", Select)
+        if region_select.value in regions:
+            return str(region_select.value)
+        return regions[0]
+
     def on_mount(self) -> None:
         self._toggle_vps_fields(str(self.query_one("#select-provider", Select).value))
         self.fetch_live_regions()
@@ -318,9 +343,7 @@ class DeployScreen(WispScreen):
             if str(self.query_one("#select-provider", Select).value) != provider_val:
                 return  # Stale fetch: the user already switched providers.
             region_select = self.query_one("#select-region", Select)
-            current_val = (
-                region_select.value if region_select.value in regions else regions[0]
-            )
+            current_val = self._preferred_region(provider_val, regions)
             region_select.set_options([(r, r) for r in regions])
             region_select.value = current_val
 
@@ -344,9 +367,7 @@ class DeployScreen(WispScreen):
             # so the Select is repopulated with the standard list.
             regions = self._get_fallback_regions(provider_val)
             region_select = self.query_one("#select-region", Select)
-            current_val = (
-                region_select.value if region_select.value in regions else regions[0]
-            )
+            current_val = self._preferred_region(provider_val, regions)
             region_select.set_options([(r, r) for r in regions])
             region_select.value = current_val
 
