@@ -303,15 +303,69 @@ class DeployScreen(WispScreen):
         return regions[0]
 
     def on_mount(self) -> None:
+        self._rendered_region_defaults = self._current_region_defaults()
         self._toggle_vps_fields(str(self.query_one("#select-provider", Select).value))
         self.fetch_live_regions()
 
     def on_screen_resume(self) -> None:
+        # Installed screens keep their widgets across visits: compose-time
+        # values go stale after the config screen saves, so re-read them here.
+        self._refresh_config_defaults()
         region_select = self.query_one("#select-region", Select)
         current = str(region_select.value)
         self.query_one("#deploy-summary", Static).update(
             self._build_summary(current, self._initial_provider())
         )
+
+    def _current_region_defaults(self) -> dict[str, str | None]:
+        """Snapshot the configured default region per region-based provider.
+
+        Args:
+            None.
+
+        Returns:
+            dict[str, str | None]: Provider identifier -> configured region
+            (``None`` when unset), for the providers that have a region step.
+        """
+        return {
+            ProviderEnum.AWS.value: get_default_region_for(ProviderEnum.AWS.value)
+            or None,
+            ProviderEnum.OCI.value: get_default_region_for(ProviderEnum.OCI.value)
+            or None,
+            ProviderEnum.GCP.value: get_default_region_for(ProviderEnum.GCP.value)
+            or None,
+        }
+
+    def _refresh_config_defaults(self) -> None:
+        """Re-read the config-backed values this screen pre-filled at mount.
+
+        The TTL row and the VPS tunnel port always mirror the current
+        ``WispConfig`` (per-run overrides happen at deploy time and are not
+        stored here). The region is only re-selected when the selected
+        provider's configured default changed since the screen last rendered —
+        an explicit user pick survives the round trip untouched.
+        """
+        state = self.app.state  # type: ignore[attr-defined]
+        cfg = state.config
+        self.query_one("#input-ttl-minutes", Input).value = str(
+            cfg.max_session_ttl_minutes
+        )
+        self.query_one("#switch-ttl", Switch).value = cfg.max_session_ttl_minutes > 0
+        self.query_one("#input-vps-wireguard-port", Input).value = str(
+            cfg.wireguard_port
+        )
+
+        provider_val = str(self.query_one("#select-provider", Select).value)
+        new_defaults = self._current_region_defaults()
+        old_defaults = getattr(self, "_rendered_region_defaults", None) or {}
+        if new_defaults.get(provider_val) != old_defaults.get(provider_val):
+            self._rendered_region_defaults = new_defaults
+            regions = getattr(self, "_last_regions", None) or []
+            if regions:
+                region_select = self.query_one("#select-region", Select)
+                preferred = self._preferred_region(provider_val, regions)
+                if preferred != str(region_select.value):
+                    region_select.value = preferred
 
     @work(thread=True)
     def fetch_live_regions(self) -> None:
@@ -342,6 +396,7 @@ class DeployScreen(WispScreen):
         try:
             if str(self.query_one("#select-provider", Select).value) != provider_val:
                 return  # Stale fetch: the user already switched providers.
+            self._last_regions = list(regions)
             region_select = self.query_one("#select-region", Select)
             current_val = self._preferred_region(provider_val, regions)
             region_select.set_options([(r, r) for r in regions])
@@ -366,6 +421,7 @@ class DeployScreen(WispScreen):
             # deploy to a region that does not exist for the selected provider,
             # so the Select is repopulated with the standard list.
             regions = self._get_fallback_regions(provider_val)
+            self._last_regions = list(regions)
             region_select = self.query_one("#select-region", Select)
             current_val = self._preferred_region(provider_val, regions)
             region_select.set_options([(r, r) for r in regions])
