@@ -25,7 +25,7 @@ list).
 > `PROVIDERS_MAP`
 > ([`src/wisp/providers/__init__.py`](../src/wisp/providers/__init__.py)).
 
-### `wisp deploy [provider] [-r/--region REGION]`
+### `wisp deploy [provider] [-r/--region REGION] [--log-level LEVEL]`
 
 Provisions a VM and brings the tunnel up. For `vps`, skips provisioning
 entirely and configures WireGuard on the server you point it at.
@@ -43,6 +43,8 @@ entirely and configures WireGuard on the server you point it at.
 - VPS only: `--host HOST`, `--ssh-user USER`, `--ssh-port PORT`,
   `--ssh-key-path PATH` — connection overrides for this run (the TOML
   `[vps]` section is the fallback).
+- `--log-level LEVEL` — console verbosity (`debug`/`info`/`warning`/`error`,
+  default `info`). The rotating file log always keeps `DEBUG`.
 
 **Examples:**
 
@@ -66,7 +68,7 @@ Prints the deployment result as JSON, e.g.:
 }
 ```
 
-### `wisp destroy [provider] [-r/--region REGION]`
+### `wisp destroy [provider] [-r/--region REGION] [--log-level LEVEL]`
 
 Disconnects the local client, destroys the Pulumi stack (cancelling any
 in-flight update first), and removes local artifacts (inventory, key, client

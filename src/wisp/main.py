@@ -60,6 +60,7 @@ class RuntimeArgs(TypedDict):
     ssh_user: str | None
     ssh_port: int | None
     ssh_key_path: str | None
+    log_level: str | None
 
 
 def parse_args() -> RuntimeArgs:
@@ -91,9 +92,21 @@ def parse_args() -> RuntimeArgs:
     # Subparsers for different commands
     subparsers = parser.add_subparsers(dest="command")
 
+    # Console log level for the CLI commands that stream provider activity.
+    # The file log stays at DEBUG regardless.
+    log_level_parser = argparse.ArgumentParser(add_help=False)
+    log_level_parser.add_argument(
+        "--log-level",
+        type=str.lower,
+        default="info",
+        choices=["debug", "info", "warning", "error"],
+        help="Console log verbosity (default: %(default)s). The rotating "
+        "file log always keeps DEBUG.",
+    )
+
     deploy_parser = subparsers.add_parser(
         "deploy",
-        parents=[provider_parser],
+        parents=[provider_parser, log_level_parser],
         help="Deploy a VM",
     )
     deploy_parser.add_argument(
@@ -152,7 +165,7 @@ def parse_args() -> RuntimeArgs:
 
     destroy_parser = subparsers.add_parser(
         "destroy",
-        parents=[provider_parser],
+        parents=[provider_parser, log_level_parser],
         help="Destroy VMs",
     )
     destroy_parser.add_argument(
@@ -210,6 +223,7 @@ def parse_args() -> RuntimeArgs:
         ssh_user=args.get("ssh_user"),
         ssh_port=args.get("ssh_port"),
         ssh_key_path=args.get("ssh_key_path"),
+        log_level=args.get("log_level"),
     )
 
 
@@ -293,7 +307,7 @@ def _program_for(provider: str):
         Callable: ``_create_pulumi_program`` bound to the provider class.
     """
     provider_cls = PROVIDERS_MAP[ProviderEnum(provider)]
-    return provider_cls()._create_pulumi_program  # noqa: SLF001
+    return provider_cls()._create_pulumi_program  # pyright: ignore[reportAttributeAccessIssue] # noqa: SLF001
 
 
 def _create_provider_with_credentials(provider_option: ProviderEnum):
@@ -335,8 +349,10 @@ def main() -> None:
         app.run()
         sys.exit(0)
 
-    # Set console handler to DEBUG level for CLI mode
-    logger.handlers[1].setLevel(logging.DEBUG)
+    # Console verbosity: --log-level (default INFO). The rotating file log
+    # always keeps DEBUG, so postmortems never lose detail.
+    level_name = (args["log_level"] or "info").upper()
+    logger.handlers[1].setLevel(getattr(logging, level_name, logging.INFO))
 
     # It's not necessary to do this assertion, because the CLI will always provide a provider, but it's a good safety check
     assert provider_option is not None, (

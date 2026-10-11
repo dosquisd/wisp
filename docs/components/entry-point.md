@@ -24,6 +24,10 @@ Builds an argparse parser:
   - `gc` — `--destroy` (tear down leftover stacks) and `--refresh`
     (reconcile state with the cloud before reporting).
 
+`deploy` and `destroy` accept `--log-level {debug,info,warning,error}`
+(default `info`) for console verbosity — the rotating file log always keeps
+`DEBUG`.
+
 Normalizes `command`, `provider`, and `region` to lowercase. If no subcommand is
 given, `command` defaults to `CommandEnum.TUI`.
 
