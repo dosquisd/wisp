@@ -13,6 +13,7 @@ import sys
 from typing import TypedDict
 
 from wisp.cli.app import WispApp
+from wisp.config.constants import WIREGUARD_CLIENT_CONF_PATH, WIREGUARD_KEY_PATH
 from wisp.config.credentials import (
     resolve_aws_credentials,
     resolve_gcp_credentials,
@@ -313,6 +314,7 @@ def _run_gc(destroy: bool = False, refresh: bool = False) -> None:
         print("Run `wisp gc --destroy` to tear them down.")
         return
 
+    destroyed_any = False
     for provider, (region, count) in leftover.items():
         print(f"\nDestroying {count} resource(s) from wisp-stack-{provider}...")
         try:
@@ -322,9 +324,31 @@ def _run_gc(destroy: bool = False, refresh: bool = False) -> None:
             deleted = destroy_wisp_stack(
                 _program_for(provider), provider=provider, region=region
             )
+            destroyed_any = True
             print(f"wisp-stack-{provider}: deleted {deleted} resource(s)")
         except Exception as exc:
             print(f"wisp-stack-{provider}: destroy failed: {exc}")
+
+    if destroyed_any:
+        # The destroyed stacks' local WireGuard artifacts (SSH key + client
+        # conf) are orphans now — the same cleanup a normal teardown runs.
+        # Skipped while a session is active: those files may belong to it.
+        active = read_active_session()
+        if active is not None:
+            print(f"Local artifacts left alone: session {active.summary()} is active.")
+            return
+        removed = []
+        for artifact in (WIREGUARD_KEY_PATH, WIREGUARD_CLIENT_CONF_PATH):
+            try:
+                if artifact.exists():
+                    artifact.unlink()
+                    removed.append(str(artifact))
+            except OSError as exc:
+                print(f"Could not remove {artifact}: {exc}")
+        if removed:
+            print("Removed local artifacts:")
+            for path in removed:
+                print(f"  - {path}")
 
 
 def _program_for(provider: str):
