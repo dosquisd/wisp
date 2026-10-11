@@ -162,7 +162,9 @@ def remove_wisp_server_configs(
                 for path in listing.splitlines()
                 if path.strip()
             ]
-        elif ssh_user != "root":
+        elif exit_status != 0 and ssh_user != "root":
+            # A zero exit with an unmatched glob just means "no Wisp
+            # configs"; only a real command failure is worth warning about.
             logger.warning(
                 f"Could not list /etc/wireguard as {ssh_user}@{instance_ip} "
                 f"(sudo unavailable or password required): {list_err.strip()}"
@@ -192,6 +194,15 @@ def remove_wisp_server_configs(
                 ssh,
                 f"{prefix}sh -c 'rm -f /root/wisp-*-client-*.conf"
                 f" /home/{ssh_user}/wisp-*-client-*.conf'",
+            )
+            # If the installer state file belongs to a Wisp interface, remove
+            # it too — a destroyed session must not leave it behind. A params
+            # file referencing the user's own interface survives untouched.
+            _run_remote(
+                ssh,
+                f"{prefix}sh -c 'grep -q \"^SERVER_WG_NIC=wisp-\""
+                " /etc/wireguard/params 2>/dev/null"
+                " && rm -f /etc/wireguard/params' || true",
             )
             _report(f"Removed {len(nics)} Wisp interface(s) from the server.", 0.9)
         else:
@@ -348,6 +359,26 @@ def configure_remote_server(
             )
 
         logger.info("WireGuard server installation completed successfully")
+
+        # Verify the interface actually came up: the installer only warns
+        # when wg-quick fails to start, and reporting a dead tunnel as a
+        # successful deploy would leave the user debugging silence.
+        verify = (
+            "sh -c 'systemctl is-active --quiet wg-quick@%s 2>/dev/null"
+            " || rc-service --quiet wg-quick.%s status 2>/dev/null'"
+            % (wireguard_interface, wireguard_interface)
+        )
+        verify_status, _, verify_err = _run_remote(ssh, f"sudo -n {verify}")
+        if verify_status != 0:
+            raise RuntimeError(
+                f"WireGuard interface '{wireguard_interface}' is not running "
+                f"on the server (systemd/rc service not active): "
+                f"{verify_err.strip()}. Check 'journalctl -u "
+                f"wg-quick@{wireguard_interface}' on the server."
+            )
+        logger.info(
+            f"WireGuard interface '{wireguard_interface}' is active on the server"
+        )
 
         # Wait a moment for the client config file to be created
         time.sleep(2)
