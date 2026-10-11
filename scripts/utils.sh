@@ -83,11 +83,15 @@ function installWireGuardClient() {
         fi
         installPackages yum install -y wireguard-tools
     elif [[ ${OS} == 'oracle' ]]; then
-        installPackages dnf install -y oraclelinux-developer-release-el8
-        dnf config-manager --disable -y ol8_developer
-        dnf config-manager --enable -y ol8_developer_UEKR6
-        dnf config-manager --save -y --setopt=ol8_developer_UEKR6.includepkgs='wireguard-tools*'
-        installPackages dnf install -y wireguard-tools
+        if [[ ${VERSION_ID} == 8* ]]; then
+            # OL8 only: wireguard-tools lives in the developer repo there.
+            installPackages dnf install -y oraclelinux-developer-release-el8
+            dnf config-manager --disable -y ol8_developer
+            dnf config-manager --enable -y ol8_developer_UEKR6
+            dnf config-manager --save -y --setopt=ol8_developer_UEKR6.includepkgs='wireguard-tools*'
+        fi
+        # OL9/OL10 ship wireguard-tools in the base repos; no release package.
+        installPackages dnf install -y wireguard-tools iptables
     elif [[ ${OS} == 'arch' ]]; then
         installPackages pacman -S --needed --noconfirm wireguard-tools
     elif [[ ${OS} == 'alpine' ]]; then
