@@ -23,6 +23,8 @@ import shutil
 import subprocess
 import sys
 
+from wisp.utils.platform import PlatformEnum
+
 logger = logging.getLogger(__name__)
 
 
@@ -121,16 +123,40 @@ def cancel_ttl_watchdog(provider: str, region: str) -> None:
         region (str): Deployment region identifier.
     """
     task_name = get_watchdog_task_name(provider, region)
-    system = platform.system()
+    system = PlatformEnum.get_platform()
     try:
-        if system == "Linux":
+        if system == PlatformEnum.LINUX:
+            # systemd-run --on-active creates TWO transient units: the .timer
+            # (which fires later) and the .service it triggers. Stopping only
+            # the service leaves the timer armed — a stale timer would run
+            # `wisp destroy` against a future session in the same region.
+            # reset-failed afterwards unloads dead units so systemd-run can
+            # reuse the same name on the next deploy.
             subprocess.run(
-                ["systemctl", "--user", "stop", f"{task_name}.service"],
+                [
+                    "systemctl",
+                    "--user",
+                    "stop",
+                    f"{task_name}.timer",
+                    f"{task_name}.service",
+                ],
                 check=False,
                 capture_output=True,
                 timeout=10,
             )
-        elif system == "Windows":
+            subprocess.run(
+                [
+                    "systemctl",
+                    "--user",
+                    "reset-failed",
+                    f"{task_name}.timer",
+                    f"{task_name}.service",
+                ],
+                check=False,
+                capture_output=True,
+                timeout=10,
+            )
+        elif system == PlatformEnum.WINDOWS:
             subprocess.run(
                 ["schtasks", "/Delete", "/TN", task_name, "/F"],
                 check=False,
