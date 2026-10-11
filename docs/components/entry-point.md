@@ -19,7 +19,9 @@ Builds an argparse parser:
   - `deploy` — `-r/--region`, `--ttl MINUTES` (session TTL watchdog override),
     `--wireguard-port PORT`, and VPS-only connection overrides `--host`,
     `--ssh-user`, `--ssh-port`, `--ssh-key-path`.
-  - `destroy` — `-r/--region`.
+  - `destroy` — `-r/--region` and VPS-only connection overrides `--host`,
+    `--ssh-user`, `--ssh-port`, `--ssh-key-path` (precedence: flags >
+    deploy-time marker > `[vps]` TOML).
   - `regions`.
   - `gc` — `--destroy` (tear down leftover stacks) and `--refresh`
     (reconcile state with the cloud before reporting).

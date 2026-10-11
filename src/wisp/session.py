@@ -38,6 +38,7 @@ from collections.abc import Callable
 from typing import Any
 
 from wisp.config.constants import WISP_ACTIVE_SESSION_PATH
+from wisp.config.credentials import VPSCredentials
 from wisp.providers import PROVIDERS_MAP, ProviderEnum
 from wisp.utils import logger, secure_file
 from wisp.utils.watchdog import cancel_ttl_watchdog
@@ -86,6 +87,17 @@ class ActiveSession(dict):
         if not self.started_at:
             return 0.0
         return max(0.0, time.time() - self.started_at)
+
+    @property
+    def vps(self) -> dict:
+        """VPS connection details captured at deploy time (empty if absent).
+
+        Present only for ``vps`` sessions deployed after this field existed;
+        older markers (and non-VPS markers) return an empty dict, and the
+        destroy paths fall back to the TOML ``[vps]`` section.
+        """
+        value = self.get("vps")
+        return dict(value) if isinstance(value, dict) else {}
 
     def summary(self) -> str:
         """Return a one-line, human-readable description of the session."""
@@ -155,12 +167,16 @@ def _windows_process_alive(pid: int) -> bool:
         kernel32.CloseHandle(handle)
 
 
-def write_active_session(provider: str, region: str) -> None:
+def write_active_session(provider: str, region: str, vps: dict | None = None) -> None:
     """Record the active tunnel in the marker file.
 
     Args:
         provider (str): Provider name owning the session.
         region (str): Region the resources live in.
+        vps (dict | None): VPS-only connection details used for the deploy
+            (``host``, ``ssh_user``, ``ssh_port``, ``ssh_key_path``) so a
+            later destroy tears down the right server without depending on
+            the TOML ``[vps]`` section.
     """
     payload = {
         "provider": provider,
@@ -168,6 +184,8 @@ def write_active_session(provider: str, region: str) -> None:
         "pid": os.getpid(),
         "started_at": time.time(),
     }
+    if vps:
+        payload["vps"] = vps
     try:
         WISP_ACTIVE_SESSION_PATH.parent.mkdir(parents=True, exist_ok=True)
         WISP_ACTIVE_SESSION_PATH.write_text(
@@ -293,6 +311,30 @@ class SessionGuard:
         return True
 
 
+def _destroy_provider(provider_name: str):
+    """Build the provider instance used by a teardown, honoring the marker.
+
+    VPS sessions carry their deploy-time connection details in the marker:
+    the TOML ``[vps]`` section may never have had them (CLI-flag deploys) or
+    may have drifted since. Cloud providers need no special handling.
+
+    Args:
+        provider_name (str): Provider name owning the session.
+
+    Returns:
+        BaseProvider: The provider instance for ``delete_vm``.
+    """
+    provider_enum = ProviderEnum(provider_name)
+    if provider_enum == ProviderEnum.VPS:
+        marker = read_active_session()
+        marker_vps = marker.vps if marker is not None else {}
+        if marker_vps.get("host"):
+            return PROVIDERS_MAP[provider_enum](
+                credentials=VPSCredentials(**marker_vps)
+            )
+    return PROVIDERS_MAP[provider_enum]()
+
+
 def teardown_active_session(
     provider_name: str,
     region: str,
@@ -338,8 +380,8 @@ def teardown_active_session(
         logger.warning(f"Local tunnel teardown skipped: {exc}")
 
     report("Destroying cloud resources...", 0.4)
-    provider_cls = PROVIDERS_MAP[ProviderEnum(provider_name)]
-    provider_cls().delete_vm(region=region, on_progress=on_progress)
+    provider = _destroy_provider(provider_name)
+    provider.delete_vm(region=region, on_progress=on_progress)
 
     # The marker is the single source of truth for "there are resources out
     # there". Reaching this line means they are gone, so the marker must follow

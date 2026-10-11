@@ -157,7 +157,9 @@ class VPSProvider(BaseProvider):
         allowed_ips = (
             f"{get_public_ip()}/32" if config.force_current_ip else "0.0.0.0/0,::/0"
         )
-        wireguard_port = config.wireguard_port if config.wireguard_port > 0 else get_wireguard_port()
+        wireguard_port = (
+            config.wireguard_port if config.wireguard_port > 0 else get_wireguard_port()
+        )
 
         template_context = InventoryContext(
             ssh_user=creds.ssh_user,
@@ -177,6 +179,18 @@ class VPSProvider(BaseProvider):
             wireguard_client_ipv4="",
             wireguard_client_ipv6="",
             wireguard_skip_client="n",
+        )
+
+        # Re-deploys: the installer detects leftover state (/etc/wireguard/
+        # params) and blocks on its manage menu, and a still-running previous
+        # Wisp interface would hold the subnet. Clean stale state first —
+        # best effort, a fresh server simply has nothing to remove.
+        remove_wisp_server_configs(
+            ssh_user=creds.ssh_user,
+            instance_ip=host,
+            ssh_key_file=str(key_path) if key_path else "",
+            on_progress=on_progress,
+            also_remove_params=True,
         )
 
         configure_remote_server(template_context, on_progress=on_progress)

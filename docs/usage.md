@@ -77,6 +77,11 @@ config). For `vps`, it also tears the tunnel down on the server: every
 (packages and non-wisp configs are never touched). Prints the number of
 deleted resources:
 
+VPS connection details resolve in this order: `--host`/`--ssh-user`/
+`--ssh-port`/`--ssh-key-path` flags, then the deploy-time marker (what the
+deploy actually used — the TUI writes it automatically), then the `[vps]`
+TOML section.
+
 ```bash
 wisp destroy aws -r eu-west-1
 # → Deleted VM. Count: 4

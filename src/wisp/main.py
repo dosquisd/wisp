@@ -176,6 +176,36 @@ def parse_args() -> RuntimeArgs:
         help="Region from which VMs will be destroyed "
         "(defaults to the provider's configured region).",
     )
+    destroy_parser.add_argument(
+        "--host",
+        type=str,
+        default=None,
+        metavar="HOST",
+        help="VPS only: the server's hostname/IP (overrides the deploy-time "
+        "marker and [vps].host).",
+    )
+    destroy_parser.add_argument(
+        "--ssh-user",
+        type=str,
+        default=None,
+        metavar="USER",
+        help="VPS only: SSH user (overrides the marker and [vps].ssh_user).",
+    )
+    destroy_parser.add_argument(
+        "--ssh-port",
+        type=int,
+        default=None,
+        metavar="PORT",
+        help="VPS only: SSH port (overrides the marker and [vps].ssh_port).",
+    )
+    destroy_parser.add_argument(
+        "--ssh-key-path",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="VPS only: SSH private key path (overrides the marker and "
+        "[vps].ssh_key_path).",
+    )
 
     subparsers.add_parser(
         "regions",
@@ -415,6 +445,26 @@ def main() -> None:
         # Cancel the optional TTL watchdog before/after teardown: best effort,
         # and harmless if it already fired or was never scheduled.
         cancel_ttl_watchdog(provider_option.value, region)
+        # VPS: the deploy-time connection details live in the marker (the TOML
+        # may never have had them for flag-based deploys). Precedence:
+        # CLI flags > deploy-time marker > TOML [vps].
+        if provider_option == ProviderEnum.VPS:
+            marker = read_active_session()
+            marker_vps = marker.vps if marker is not None else {}
+            creds = resolve_vps_credentials()
+            creds.host = args["host"] or marker_vps.get("host") or creds.host
+            creds.ssh_user = (
+                args["ssh_user"] or marker_vps.get("ssh_user") or creds.ssh_user
+            )
+            creds.ssh_port = (
+                args["ssh_port"] or marker_vps.get("ssh_port") or creds.ssh_port
+            )
+            creds.ssh_key_path = (
+                args["ssh_key_path"]
+                or marker_vps.get("ssh_key_path")
+                or creds.ssh_key_path
+            )
+            provider = PROVIDERS_MAP[provider_option](credentials=creds)
         delete_success = provider.delete_vm(region=region)
         # If this destroy matches a session the TUI marked as active, clear the
         # marker: resources are gone, and leaving it would make the next TUI

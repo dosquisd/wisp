@@ -286,7 +286,20 @@ class ProgressScreen(WispScreen):
         provider_name = state.provider_name
         region = state.selected_region
 
-        write_active_session(provider_name, region)
+        write_active_session(
+            provider_name,
+            region,
+            vps=(
+                {
+                    "host": state.vps_credentials.host,
+                    "ssh_user": state.vps_credentials.ssh_user,
+                    "ssh_port": state.vps_credentials.ssh_port,
+                    "ssh_key_path": state.vps_credentials.ssh_key_path,
+                }
+                if provider_name == ProviderEnum.VPS.value
+                else None
+            ),
+        )
 
         # Optional OS-level TTL watchdog: fires `wisp destroy` even if this
         # process dies, so a forgotten session cannot bill forever. The TTL

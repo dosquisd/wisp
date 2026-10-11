@@ -1,6 +1,7 @@
 """Remote WireGuard server configuration via Paramiko (SSH/SFTP)."""
 
 import re
+import socket
 import stat
 import time
 from collections.abc import Callable
@@ -95,6 +96,7 @@ def remove_wisp_server_configs(
     instance_ip: str,
     ssh_key_file: str = "",
     on_progress: Callable[[str, float | None], None] | None = None,
+    also_remove_params: bool = False,
 ) -> bool:
     """Tear down every Wisp-created WireGuard interface on a remote server.
 
@@ -103,8 +105,15 @@ def remove_wisp_server_configs(
     ``wg0.conf`` (or any non-Wisp config) is left alone. For each match the
     interface is brought down first: ``wg-quick down`` runs the config's
     ``PostDown`` rules, which removes the iptables/firewall rules the
-    installer added. Packages are intentionally kept — the server may have
-    been using WireGuard before Wisp.
+    installer added. The generated client configs (which contain the
+    client's private key) are removed from the server too. Packages are
+    intentionally kept — the server may have been using WireGuard before
+    Wisp.
+
+    Everything runs through ``sudo -n`` unless connecting as root:
+    ``/etc/wireguard`` is root-only on many distros, so an unprivileged
+    glob finds nothing and ``wg-quick``/``rm`` would fail. ``-n`` fails
+    fast instead of hanging when a password would be required.
 
     Args:
         ssh_user (str): User to connect as (needs sudo/root).
@@ -113,6 +122,12 @@ def remove_wisp_server_configs(
             agent/default-key authentication.
         on_progress (Callable[[str, float | None], None] | None): Optional
             progress callback.
+        also_remove_params (bool): Also delete ``/etc/wireguard/params`` —
+            the installer's state file, which would otherwise trigger its
+            interactive manage menu on a re-deploy. Deploy paths pass True
+            unconditionally: a successful install overwrites params anyway.
+            Destroy paths leave it (they may run against servers whose
+            params file predates Wisp).
 
     Returns:
         bool: True when the cleanup ran (even with zero matches); False when
@@ -123,6 +138,7 @@ def remove_wisp_server_configs(
         if on_progress is not None:
             on_progress(message, progress)
 
+    prefix = "" if ssh_user == "root" else "sudo -n "
     _report("Connecting to server over SSH...")
     try:
         ssh = _connect_ssh(ssh_user, instance_ip, ssh_key_file)
@@ -133,30 +149,50 @@ def remove_wisp_server_configs(
 
     try:
         _report("Removing Wisp WireGuard config from the server...", 0.6)
-        # Glob our configs: the pattern only matches Wisp-created files.
-        # "echo" + glob keeps this POSIX-shell safe (no ls parsing).
-        _, listing = _run_remote(ssh, "echo /etc/wireguard/wisp-*.conf")
+        # The glob must expand inside a privileged shell: /etc/wireguard is
+        # often 0700 root, so an unprivileged expansion matches nothing.
+        exit_status, listing, list_err = _run_remote(
+            ssh, f"{prefix}sh -c 'echo /etc/wireguard/wisp-*.conf'"
+        )
         listing = listing.strip()
         nics = []
-        if listing and "*" not in listing:
+        if exit_status == 0 and listing and "*" not in listing:
             nics = [
                 path.removeprefix("/etc/wireguard/").removesuffix(".conf")
                 for path in listing.splitlines()
                 if path.strip()
             ]
+        elif ssh_user != "root":
+            logger.warning(
+                f"Could not list /etc/wireguard as {ssh_user}@{instance_ip} "
+                f"(sudo unavailable or password required): {list_err.strip()}"
+            )
 
         for nic in nics:
             logger.info(f"Tearing down Wisp interface '{nic}' on {instance_ip}")
             # Best effort per interface: a missing/failed step for one config
             # must not stop the rest of the cleanup.
-            _run_remote(ssh, f"wg-quick down {nic} 2>/dev/null || true")
+            _run_remote(ssh, f"{prefix}wg-quick down {nic} 2>/dev/null || true")
             _run_remote(
                 ssh,
-                f"systemctl disable --now wg-quick@{nic} 2>/dev/null || true",
+                f"{prefix}systemctl disable --now wg-quick@{nic} 2>/dev/null || true",
             )
-            _run_remote(ssh, f"rm -f /etc/wireguard/{nic}.conf")
+            _run_remote(ssh, f"{prefix}rm -f /etc/wireguard/{nic}.conf")
+
+        if also_remove_params:
+            # Stale installer state would trigger the manage menu (a
+            # blocking prompt) on the next deploy — even when no Wisp config
+            # is present anymore (destroy already removed it).
+            _run_remote(ssh, f"{prefix}rm -f /etc/wireguard/params")
 
         if nics:
+            # The generated client confs hold the client's private key; they
+            # must not linger on the server (root's and the SSH user's home).
+            _run_remote(
+                ssh,
+                f"{prefix}sh -c 'rm -f /root/wisp-*-client-*.conf"
+                f" /home/{ssh_user}/wisp-*-client-*.conf'",
+            )
             _report(f"Removed {len(nics)} Wisp interface(s) from the server.", 0.9)
         else:
             _report("No Wisp interfaces found on the server.", 0.9)
@@ -252,8 +288,11 @@ def configure_remote_server(
         logger.debug(f"Executing remote command: {command}")
         _report("Installing WireGuard on the server (this may take several minutes)...")
 
-        # Execute the script with a pseudo-terminal for sudo
-        stdin, stdout, stderr = ssh.exec_command(command, get_pty=True, timeout=300)
+        # Execute the script with a pseudo-terminal for sudo. The channel
+        # read timeout (10 min) bounds a hung install: the installer streams
+        # output continuously, so 10 quiet minutes almost always mean it is
+        # blocked on an interactive prompt.
+        stdin, stdout, stderr = ssh.exec_command(command, get_pty=True, timeout=600)
 
         # Stream the installer output in real-time. `recv_exit_status()` blocks
         # until the script exits and delivers *no* output while running, so a
@@ -284,7 +323,18 @@ def configure_remote_server(
                     _report(line, None)
 
         seen_lines: list[str] = []
-        _stream_installer_output()
+        try:
+            _stream_installer_output()
+        except socket.timeout as exc:
+            # The channel read timeout fired: no installer output for many
+            # minutes. It is almost certainly blocked on an interactive
+            # prompt — surface the tail so the prompt itself is visible.
+            tail = "\n".join(seen_lines[-15:])
+            raise RuntimeError(
+                "The WireGuard installer produced no output for 10 minutes — "
+                "it is likely waiting for input on the server.\n"
+                f"Last installer output:\n{tail}"
+            ) from exc
         exit_status = stdout.channel.recv_exit_status()
         stderr_text = stderr.read().decode()
 
