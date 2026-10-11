@@ -293,8 +293,6 @@ function installWireGuard() {
 	# Make sure the directory exists (this does not seem the be the case on fedora)
 	mkdir /etc/wireguard >/dev/null 2>&1
 
-	chmod 600 -R /etc/wireguard/
-
 	SERVER_PRIV_KEY=$(wg genkey)
 	SERVER_PUB_KEY=$(echo "${SERVER_PRIV_KEY}" | wg pubkey)
 
@@ -317,11 +315,25 @@ Address = ${SERVER_WG_IPV4}/24,${SERVER_WG_IPV6}/64
 ListenPort = ${SERVER_PORT}
 PrivateKey = ${SERVER_PRIV_KEY}" >"/etc/wireguard/${SERVER_WG_NIC}.conf"
 
+	# NOTE: firewall-cmd must NEVER run inside wg-quick's PostUp — from a
+	# systemd unit the dbus sender is denied on EL9 ("Sender is not
+	# authorized to send message"), which rolls the interface back. Oracle
+	# Linux always uses the iptables PostUps below; the firewalld zone is
+	# configured once here, where dbus works.
 	if pgrep firewalld; then
 		FIREWALLD_IPV4_ADDRESS=$(echo "${SERVER_WG_IPV4}" | cut -d"." -f1-3)".0"
 		FIREWALLD_IPV6_ADDRESS=$(echo "${SERVER_WG_IPV6}" | sed 's/:[^:]*$/:0/')
-		echo "PostUp = firewall-cmd --zone=public --add-interface=${SERVER_WG_NIC} && firewall-cmd --add-port ${SERVER_PORT}/udp && firewall-cmd --add-rich-rule='rule family=ipv4 source address=${FIREWALLD_IPV4_ADDRESS}/24 masquerade' && firewall-cmd --add-rich-rule='rule family=ipv6 source address=${FIREWALLD_IPV6_ADDRESS}/24 masquerade'
+		if [[ ${OS} == 'oracle' ]]; then
+			# Permanent zone config: port + masquerade + interface binding.
+			# The binding by name works even before the interface exists.
+			firewall-cmd --permanent --zone=public --add-port=${SERVER_PORT}/udp
+			firewall-cmd --permanent --zone=public --add-masquerade
+			firewall-cmd --permanent --zone=public --add-interface=${SERVER_WG_NIC}
+			firewall-cmd --reload
+		else
+			echo "PostUp = firewall-cmd --zone=public --add-interface=${SERVER_WG_NIC} && firewall-cmd --add-port ${SERVER_PORT}/udp && firewall-cmd --add-rich-rule='rule family=ipv4 source address=${FIREWALLD_IPV4_ADDRESS}/24 masquerade' && firewall-cmd --add-rich-rule='rule family=ipv6 source address=${FIREWALLD_IPV6_ADDRESS}/24 masquerade'
 PostDown = firewall-cmd --zone=public --add-interface=${SERVER_WG_NIC} && firewall-cmd --remove-port ${SERVER_PORT}/udp && firewall-cmd --remove-rich-rule='rule family=ipv4 source address=${FIREWALLD_IPV4_ADDRESS}/24 masquerade' && firewall-cmd --remove-rich-rule='rule family=ipv6 source address=${FIREWALLD_IPV6_ADDRESS}/24 masquerade'" >>"/etc/wireguard/${SERVER_WG_NIC}.conf"
+		fi
 	else
 		echo "PostUp = iptables -I INPUT -p udp --dport ${SERVER_PORT} -j ACCEPT
 PostUp = iptables -I FORWARD -i ${SERVER_PUB_NIC} -o ${SERVER_WG_NIC} -j ACCEPT
@@ -337,14 +349,16 @@ PostDown = ip6tables -D FORWARD -i ${SERVER_WG_NIC} -j ACCEPT
 PostDown = ip6tables -t nat -D POSTROUTING -o ${SERVER_PUB_NIC} -j MASQUERADE" >>"/etc/wireguard/${SERVER_WG_NIC}.conf"
 	fi
 
+	# WireGuard runs as a systemd service: the conf directory must be
+	# traversable (700) and the files private (600). `chmod 600 -R` would
+	# strip the directory's execute bit and wg-quick would fail with
+	# "does not exist".
+	chmod 700 /etc/wireguard/
+	chmod 600 /etc/wireguard/*
+
 	# Enable routing on the server
 	echo "net.ipv4.ip_forward = 1
 net.ipv6.conf.all.forwarding = 1" >/etc/sysctl.d/wg.conf
-
-	if [[ ${OS} == 'fedora' ]]; then
-		chmod -v 700 /etc/wireguard
-		chmod -v 600 /etc/wireguard/*
-	fi
 
 	if [[ ${OS} == 'alpine' ]]; then
 		sysctl -p /etc/sysctl.d/wg.conf
@@ -372,13 +386,16 @@ net.ipv6.conf.all.forwarding = 1" >/etc/sysctl.d/wg.conf
 
 	# WireGuard might not work if we updated the kernel. Tell the user to reboot
 	if [[ ${WG_RUNNING} -ne 0 ]]; then
-		echo -e "\n${RED}WARNING: WireGuard does not seem to be running.${NC}"
+		echo -e "\n${RED}WireGuard does not seem to be running.${NC}"
 		if [[ ${OS} == 'alpine' ]]; then
 			echo -e "${ORANGE}You can check if WireGuard is running with: rc-service wg-quick.${SERVER_WG_NIC} status${NC}"
 		else
 			echo -e "${ORANGE}You can check if WireGuard is running with: systemctl status wg-quick@${SERVER_WG_NIC}${NC}"
 		fi
 		echo -e "${ORANGE}If you get something like \"Cannot find device ${SERVER_WG_NIC}\", please reboot!${NC}"
+		# A deploy without a running interface is a failed deploy: exit
+		# non-zero so the orchestrating tool treats it as such.
+		exit 1
 	else # WireGuard is running
 		echo -e "\n${GREEN}WireGuard is running.${NC}"
 		if [[ ${OS} == 'alpine' ]]; then
