@@ -35,7 +35,7 @@ from wisp.config.credentials import VPSCredentials, resolve_vps_credentials
 from wisp.config.settings import WispConfig, load_wisp_config
 from wisp.providers.base import BaseProvider, DeployVMResult, ProgressCallback
 from wisp.schemas import InventoryContext
-from wisp.utils import get_public_ip
+from wisp.utils import get_public_ip, get_wireguard_port
 from wisp.wireguard import (
     connect_wireguard_client,
     disconnect_wireguard_client,
@@ -157,12 +157,13 @@ class VPSProvider(BaseProvider):
         allowed_ips = (
             f"{get_public_ip()}/32" if config.force_current_ip else "0.0.0.0/0,::/0"
         )
+        wireguard_port = config.wireguard_port if config.wireguard_port > 0 else get_wireguard_port()
 
         template_context = InventoryContext(
             ssh_user=creds.ssh_user,
             instance_ip=host,
             ssh_key_file=key_path if key_path else "",
-            wireguard_port=config.wireguard_port if config.wireguard_port > 0 else "",
+            wireguard_port=wireguard_port,
             allowed_ips=allowed_ips,
             wireguard_public_ip=host,
             # Server-side interface gets a Wisp-namespaced name: the VPS may
@@ -179,15 +180,6 @@ class VPSProvider(BaseProvider):
         )
 
         configure_remote_server(template_context, on_progress=on_progress)
-
-        # The real port may differ from the config (installer picks a random
-        # one when unset): read it back from the downloaded client config.
-        wireguard_port = config.wireguard_port
-        if WIREGUARD_CLIENT_CONF_PATH.exists():
-            for line in WIREGUARD_CLIENT_CONF_PATH.read_text().splitlines():
-                if line.strip().lower().startswith("listenport"):
-                    wireguard_port = int(line.split("=")[1].strip())
-                    break
 
         connect_response = connect_wireguard_client(
             WIREGUARD_CLIENT_CONF_PATH.read_text()
