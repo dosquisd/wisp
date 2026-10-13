@@ -72,8 +72,8 @@ logs/       (runtime)                # Rotating log files (gitignored)
 
 The **trust boundary** worth noting: the unprivileged frontend never runs
 `wg-quick` directly. Instead it sends a request to the daemon over
-`/run/wisp.sock` (Linux/macOS) or `\\.\pipe\wisp` (Windows). The socket/pipe is
-restricted to root and the `wisp` group (`0660 root:wisp` on Linux/macOS;
+`/run/wisp.sock` (Linux) or `\\.\pipe\wisp` (Windows). The socket/pipe is
+restricted to root and the `wisp` group (`0660 root:wisp` on Linux;
 SIDs on Windows), so any user in the `wisp` group can control the local tunnel,
 but only the privileged daemon actually mutates the WireGuard config and brings
 the interface up.
@@ -133,7 +133,8 @@ Pulumi program and provider-specific logic:
 - `delete_vm(region, on_progress=None) -> int`
 
 `ProviderEnum` and `PROVIDERS_MAP` in `providers/__init__.py` map a provider
-name (`"aws"`, `"oci"`) to its concrete class. Adding a new provider means
+name (`"aws"`, `"oci"`, `"gcp"`, `"vps"`) to its concrete class. Adding a new
+provider means
 implementing `BaseProvider` (or extending `PulumiProvider`) and registering it
 in `PROVIDERS_MAP`. See [Contributing](./contributing.md).
 

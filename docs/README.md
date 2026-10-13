@@ -23,10 +23,11 @@ non-interactive CLI subcommands.
 | Document | Contents |
 | ---------- | ---------- |
 | [Architecture](./architecture.md) | High-level design, module map, runtime data flow |
-| [Installation](./installation.md) | System requirements, `setup.sh` (Linux/macOS), `setup.ps1` (Windows), daemon, dependencies |
+| [Installation](./installation.md) | System requirements, `setup.sh` (Linux), `setup.ps1` (Windows), daemon, dependencies, uninstall |
 | [Usage](./usage.md) | CLI subcommands and the interactive TUI |
-| [Configuration](./configuration.md) | `wisp.toml`, `WispConfig`, constants, environment assumptions |
+| [Configuration](./configuration.md) | `wisp.toml`, `WispConfig`, constants, Pulumi backend |
 | [Deployment flow](./deployment-flow.md) | Step-by-step of deploy and destroy |
+| [Troubleshooting](./troubleshooting.md) | Field-tested fixes: daemon, sockets, firewalls, leftovers |
 | [Components](./components/README.md) | Per-module reference (providers, wireguard, daemon, cli, utils) |
 | [Security model](./security.md) | Keys, firewall rules, socket permissions, trust boundaries |
 | [Contributing](./contributing.md) | Adding a provider, code layout, style |
@@ -47,7 +48,7 @@ non-interactive CLI subcommands.
                │  Fetches generated wg0-client.conf back  │
                │ ◄────────────────────────────────────────│
                │
-               │  Unix socket /run/wisp.sock (Linux/macOS)
+               │  Unix socket /run/wisp.sock (Linux)
                │  Named Pipe \\.\pipe\wisp (Windows)
                ▼
         ┌──────────────┐  wg-quick up/down wg0    ┌──────────────────┐
@@ -60,5 +61,5 @@ non-interactive CLI subcommands.
 
 The client-side privileged daemon exists so the unprivileged CLI/TUI never needs
 `sudo` to bring the local WireGuard interface up or down; it talks to the daemon
-over a group-restricted Unix socket (Linux/macOS) or Named Pipe (Windows)
+over a group-restricted Unix socket (Linux) or Named Pipe (Windows)
 instead.

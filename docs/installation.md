@@ -2,19 +2,30 @@
 
 ## Requirements
 
-- Linux/macOS host for the client (the daemon uses systemd socket activation on
-  Linux, or a native Windows service + Named Pipes on Windows; the macOS adapter
-  is not implemented yet — see `MacOSAdapter`
+- Linux host for the client (macOS support is planned; the daemon uses systemd
+  socket activation on Linux, or a native Windows service + Named Pipes on
+  Windows; the macOS adapter is not implemented yet — see `MacOSAdapter`
   in [`daemon/adapter.py`](../src/wisp/daemon/adapter.py)).
 - **Python 3.14+** (see `.python-version` and `requires-python` in
-  `pyproject.toml`).
+  `pyproject.toml`) — `uv` installs it for you automatically.
 - **WireGuard tools** (`wg`, `wg-quick`) on the client — installed by `setup.sh`
-  (Linux/macOS) or `setup.ps1` (Windows).
-- **Pulumi CLI** — installed by `setup.sh` (Linux/macOS) or `setup.ps1` (Windows)
+  (Linux) or `setup.ps1` (Windows).
+- **Pulumi CLI** — installed by `setup.sh` (Linux) or `setup.ps1` (Windows)
   unless `--skip-pulumi` is passed.
 - **Cloud credentials** available in the environment (for example via the AWS
   CLI, `~/.aws/credentials`, or `~/.oci/config`), with permissions to manage
   instances, security rules, and key pairs, **or** configured in `wisp.toml`.
+
+## Python dependencies
+
+All installed automatically by `uv tool install` (the CLI) and by `pip` for
+the daemon:
+
+- Core: `textual` (TUI), `paramiko` (SSH/SFTP), `tomli-w` (TOML writing),
+  `tqdm` (CLI progress).
+- Cloud SDKs: `boto3` (AWS), `oci` (Oracle), `google-cloud-compute` (GCP).
+- Pulumi: `pulumi`, `pulumi-aws`, `pulumi-oci`, `pulumi-gcp`, `pulumi-tls`.
+- Windows only: `pywin32` (Named Pipe transport + Windows service).
 
 ## Installing the CLI
 
@@ -26,7 +37,7 @@ uv tool install --editable .
 
 ## Installing the privileged daemon
 
-### Linux/macOS
+### Linux
 
 The client-side daemon must run as root so it can bring the local WireGuard
 interface up and down. `setup.sh` installs it. **Run it as root** (it checks and
@@ -82,16 +93,20 @@ Pipes (`WindowsNamedPipeTransport`) for communication with the CLI/TUI.
 
 ## Python dependencies
 
-Declared in `pyproject.toml`:
+Declared in `pyproject.toml` and installed automatically by `uv tool install`
+(the CLI) and `pip` (the daemon):
 
-- `pulumi` (`>=3,<4`) and `pulumi-aws` (`>=7,<8`) — infrastructure provisioning.
-- `pulumi-oci` (`>=4.22.0`) — OCI provider support.
+- `pulumi` (`>=3,<4`), `pulumi-aws` (`>=7,<8`), `pulumi-oci` (`>=4.22.0`), and
+  `pulumi-gcp` (`>=9.37.0`) — infrastructure provisioning.
 - `pulumi-tls` — generates the RSA 4096 key pair for SSH.
-- `boto3` — lists available AWS regions.
+- `boto3` — AWS SDK (regions, credentials).
 - `oci` — OCI SDK (regions, credentials).
+- `google-cloud-compute` — GCP SDK (regions, credentials).
 - `paramiko` — SSH/SFTP remote server configuration.
 - `textual` — the terminal UI.
+- `tomli-w` — writes `wisp.toml` when the TUI saves settings.
 - `tqdm` — CLI-mode progress bar.
+- `pywin32` (Windows only) — Named Pipe transport + Windows service.
 
 ## Runtime directories
 
@@ -99,9 +114,46 @@ These are created/populated at runtime and are gitignored:
 
 | Path | Contents |
 | ------ | ---------- |
-| `keys/wireguard-key.pem` | SSH/WireGuard private key (`0600` on Linux/macOS, icacls on Windows) |
+| `keys/wireguard-key.pem` | SSH/WireGuard private key (`0600` on Linux, icacls on Windows) |
 | `wireguard-confs/wg0-client.conf` | Client config fetched from the VM |
 | `logs/wisp.log` | Rotating log (5 MB × 5 backups) |
 
-Paths are all derived from the repository root in
-`src/wisp/config/constants.py`.
+Paths are all derived from the current working directory in
+`src/wisp/config/constants.py`. **Known limitation:** run Wisp from the
+repository root — launched from another project, `keys/`, `wireguard-confs/`,
+and `logs/` are created there. Resolving paths from user directories
+(`platformdirs`) instead of the CWD is planned; this is what currently
+blocks publishing to PyPI.
+
+## Upgrading
+
+```bash
+git pull
+uv tool install --editable . --force   # refresh the tool's isolated venv
+```
+
+`setup.sh` / `setup.ps1` are idempotent — re-run them after pulling if the
+daemon units changed (on Windows, the script stops and uninstalls the
+existing service before reinstalling).
+
+## Uninstall
+
+Destroy any live session first (`wisp destroy <provider>`) — uninstalling
+does not tear down cloud resources, and leftovers keep billing (`wisp gc`
+finds them afterwards as long as the Pulumi backend is reachable). Then:
+
+```bash
+# Linux
+uv tool uninstall wisp
+sudo systemctl disable --now wisp.socket wisp.service
+sudo rm -f /usr/lib/systemd/system/wisp.socket /usr/lib/systemd/system/wisp.service
+sudo groupdel wisp
+rm -rf ~/.config/wisp logs keys wireguard-confs
+```
+
+```powershell
+# Windows
+Stop-Service WispService
+uv tool uninstall wisp
+Remove-Item -Recurse -Force "$env:USERPROFILE\.config\wisp", logs, keys, wireguard-confs
+```

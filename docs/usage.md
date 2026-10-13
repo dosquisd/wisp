@@ -71,7 +71,7 @@ Prints the deployment result as JSON, e.g.:
 ### `wisp destroy [provider] [-r/--region REGION] [--log-level LEVEL]`
 
 Disconnects the local client, destroys the Pulumi stack (cancelling any
-in-flight update first), and removes local artifacts (inventory, key, client
+in-flight update first), and removes local artifacts (SSH key, client
 config). For `vps`, it also tears the tunnel down on the server: every
 `/etc/wireguard/wisp-*.conf` interface is brought down and deleted
 (packages and non-wisp configs are never touched). Prints the number of

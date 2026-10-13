@@ -30,13 +30,14 @@ completed failure.
    `wisp-stack-oci`, or `wisp-stack-gcp`) in project `wisp-project`, then `stack.up()` runs the
    provider-specific program:
    - `ensure_plugins()` installs the provider plugins (`aws` `v7.44.0`,
-     `oci` `v4.22.0`, `tls` `v5.5.1`) once per process.
+     `oci` `v4.22.0`, `gcp` `v9.37.0`, `tls` `v5.5.1`) once per process.
    - The provider program declares the infrastructure: for AWS,
      `create_ec2_instance` (security group + EC2 instance); for OCI,
      `create_oci_instance` (VCN, Internet Gateway, Route Table, Security List,
-     Subnet + Compute Instance). Both open UDP for the WireGuard port and
-     TCP 22 for SSH, generate an RSA 4096 key pair via `tls.PrivateKey`, and
-     export the stack outputs.
+     Subnet + Compute Instance); for GCP, `create_gcp_instance` (VPC firewall
+     rule + SPOT Compute Instance). All of them open UDP for the WireGuard
+     port and TCP 22 for SSH, generate an RSA 4096 key pair via
+     `tls.PrivateKey`, and export the stack outputs.
    - Stack **outputs**: `instance_id`, `instance_public_ip`,
      `instance_private_ip`, `instance_private_key`, `wireguard_port`, `ssh_user`.
 
@@ -44,7 +45,7 @@ completed failure.
    reporting progress via `on_progress` (TUI) or `tqdm` (CLI).
 
 4. **Persist the private key.** Reads the `instance_private_key` output and writes
-   it to `keys/wireguard-key.pem` with mode `0600` (Linux/macOS) or secured via
+   it to `keys/wireguard-key.pem` with mode `0600` (Linux) or secured via
    `icacls` with well-known SIDs (Windows).
 
 5. **Compute AllowedIPs.** `<your-ip>/32` if `force_current_ip`, else
@@ -69,9 +70,9 @@ completed failure.
 
 7. **Connect the local client.** `connect_wireguard_client(conf_text)`
    (`wireguard/local_client.py`) sends a `CONNECT` request with the config
-   content to the daemon over `/run/wisp.sock` (Linux/macOS) or
+   content to the daemon over `/run/wisp.sock` (Linux) or
    `\\.\pipe\wisp` (Windows). The daemon (`daemon/server.py`) writes the
-   WireGuard config (`0600` / icacls) and runs `wg-quick up wg0` (Linux/macOS)
+   WireGuard config (`0600` / icacls) and runs `wg-quick up wg0` (Linux)
    or the native Windows equivalent via its adapter.
 
 8. **Return.** A `DeployVMResult` with `instance_id`, `public_ip`, `private_ip`,
@@ -82,7 +83,7 @@ completed failure.
 Entry: `Provider.delete_vm(region, on_progress=None)`.
 
 1. **Disconnect the client.** `disconnect_wireguard_client()` sends a
-   `DISCONNECT` request; the daemon runs `wg-quick down wg0` (Linux/macOS) or
+   `DISCONNECT` request; the daemon runs `wg-quick down wg0` (Linux) or
    the native Windows equivalent.
 
 2. **Cancel any in-flight update, then destroy infrastructure.** Selects the
@@ -131,7 +132,7 @@ successful deploy, `ProgressScreen` writes a marker file
 Every trigger funnels into that same guard, and the first one to fire wins:
 
 | Trigger | Mechanism |
-|---|---|
+| --- | --- |
 | `q` / `Ctrl+C` on any screen | `WispApp.action_quit` -> `ShutdownScreen` |
 | `esc` / `d` / "Destroy Tunnel and Exit" | `TunnelScreen.action_destroy` -> `ShutdownScreen`. Asks first via a confirmation modal unless `[general].confirm_destroy` is `false`; the modal's "Don't ask again" checkbox persists that setting. |
 | `SIGHUP` | Terminal window closed -> `install_signal_handlers` -> guard |
@@ -200,7 +201,7 @@ no interactive prompts are needed. `scripts/utils.sh` holds shared shell helpers
 
 ## Operating system differences in the deployment flow
 
-- **Linux/macOS**: The daemon listens on `/run/wisp.sock`. The client connects
+- **Linux**: The daemon listens on `/run/wisp.sock`. The client connects
   via Unix domain socket. The server script is executed with `sudo`.
 - **Windows**: The daemon listens on the Named Pipe `\\.\pipe\wisp`. The client
   connects via `WindowsNamedPipeTransport`. The server script is still uploaded

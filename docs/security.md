@@ -10,7 +10,7 @@ running the whole application as root, Wisp splits privileges:
   Linux; native Windows Service via pywin32 on Windows) performs the privileged
   operations (`wg-quick up/down`, writing the WireGuard config).
 
-They communicate over a Unix domain socket at `/run/wisp.sock` (Linux/macOS) or
+They communicate over a Unix domain socket at `/run/wisp.sock` (Linux) or
 a Named Pipe (`\\.\pipe\wisp`) on Windows.
 
 ### Socket access control
@@ -41,17 +41,31 @@ with well-known SIDs in `daemon/transport.py`.
 The daemon (`daemon/server.py`) handles one request per connection and dispatches
 to the platform adapter for `connect` / `disconnect` / `status`.
 
-> Note: the daemon writes whatever `config_content` it receives to the WireGuard
-> config file and brings the interface up. Access to the socket/pipe is
-> therefore equivalent to control over the local WireGuard interface — which is
-> why it is restricted to the `wisp` group.
+> **Security note — socket access is effectively root.** The daemon writes
+> whatever `config_content` it receives to the WireGuard config file and
+> brings the interface up. On Linux, `wg-quick` executes the `PreUp`,
+> `PostUp`, `PreDown`, and `PostDown` directives from that file **as root**, so
+> membership in the `wisp` group is equivalent to local root — not merely
+> control over the WireGuard interface. The daemon mitigates the config
+> channel: `validate_client_config()` (`daemon/server.py`) rejects client
+> configs containing those script-hook directives before anything is written,
+> on both Linux and Windows. A local attacker with `wisp` group membership
+> still holds a privileged position — treat the group like you treat `docker`.
 
 ## Keys and secrets
 
 - A fresh **RSA 4096 key pair** is generated per deployment via `pulumi-tls`. The
   private key is a Pulumi stack output.
+- **Where the private key lives:** stack outputs are stored in the Pulumi
+  state. By default Wisp uses the Pulumi Cloud backend (`pulumi login`), so the
+  state — including this key — resides server-side on app.pulumi.com under
+  your organization; with a local/file backend it stays on your disk. As of
+  this fix, the key output is wrapped with `pulumi.Output.secret(...)`, so the
+  state stores it **encrypted at rest** instead of plaintext (older stacks
+  created before this change keep the plaintext copy in their state until the
+  resource is replaced or the state is edited).
 - The private key is written locally to `keys/wireguard-key.pem` with mode
-  `0600` (Linux/macOS) or secured via `icacls` with well-known SIDs (Windows),
+  `0600` (Linux) or secured via `icacls` with well-known SIDs (Windows),
   and used as the SSH key for the remote server configuration.
 - On destroy, the key file and client config are removed.
 - `keys/*.pem` and `wireguard-confs/*.conf` are gitignored so secrets are not
@@ -74,11 +88,17 @@ indefinitely.
 
 ## Firewall exposure
 
-The security group (AWS) or security list (OCI) opens:
+The security group (AWS), security list (OCI), or VPC firewall rule (GCP)
+opens:
 
 - UDP up to the WireGuard port (the tunnel).
 - TCP 22 (SSH, for the remote server configuration).
 - All egress.
+
+For the **Custom VPS** provider, nothing is configured on the cloud side:
+you must open the WireGuard port as an UDP ingress rule in your provider's
+firewall/security list yourself — the server-side installer only configures
+the instance's own firewall.
 
 Ingress source is controlled by `force_current_ip`:
 
@@ -94,7 +114,7 @@ stable.
 
 | Boundary | Mechanism | Notes |
 | ---------- | ----------- | ------- |
-| User ↔ daemon | Unix socket `0660 root:wisp` (Linux/macOS) or Named Pipe with SIDs (Windows) | Group-gated privileged control |
+| User ↔ daemon | Unix socket `0660 root:wisp` (Linux) or Named Pipe with SIDs (Windows) | Group-gated privileged control |
 | Local ↔ VM | SSH with generated RSA 4096 key | Key stored `0600`/icacls, removed on destroy |
 | Local ↔ user-owned VPS | SSH with the user's own key | Key path from `[vps]`/flags; used as-is, never stored by Wisp |
 | Internet ↔ VM | Cloud security group/list | Optionally pinned to your `/32` |

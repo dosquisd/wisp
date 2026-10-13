@@ -76,5 +76,5 @@ The history uses Conventional Commits (`feat:`, `fix:`, `refactor:`, `style:`,
   in **English**.
 - Docstrings follow **PEP 257** (with Google-style `Args:` / `Returns:` /
   `Raises:` sections) and the code follows **PEP 8** as enforced by Ruff.
-- Keep platform differences explicit (Linux/macOS vs Windows) wherever the
+- Keep platform differences explicit (Linux vs Windows; macOS support is planned) wherever the
   behavior differs (daemon transport, file permissions, setup scripts).

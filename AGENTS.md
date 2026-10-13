@@ -71,7 +71,7 @@ Supporting non-Python assets at the repo root:
 scripts/    wireguard-server-install.sh  # Non-interactive WireGuard installer (angristan, MIT)
             wireguard-client-install.sh  # Client installer
             utils.sh                     # Shared shell helpers (installWireGuardClient, etc.)
-setup.sh                                 # Linux/macOS installer: daemon (systemd), WireGuard tools, Pulumi
+setup.sh                                 # Linux installer: daemon (systemd), WireGuard tools, Pulumi
 setup.ps1                                # Windows installer: native service, WireGuard exe, Pulumi via winget
 packaging/  wisp.socket, wisp.service    # systemd units (Linux only)
 wisp.toml.example                        # Config template (wisp.toml itself is gitignored)
@@ -154,7 +154,7 @@ wisp.toml.example                        # Config template (wisp.toml itself is 
 - **Daemon transport**: Unix socket `/run/wisp.sock` (Linux, systemd socket
   activation via fd 3) or Named Pipe `\\.\pipe\wisp` (Windows). Selected by
   `daemon.transport.get_transport()`.
-- **File permissions**: `secure_file()` → `0600` (Linux/macOS) or `icacls`
+- **File permissions**: `secure_file()` → `0600` (Linux) or `icacls`
   with well-known SIDs `*S-1-5-18:F` / `*S-1-5-32-544:F` (Windows — SIDs
   because account names are localized on non-English Windows).
 - **TOML credentials**: AWS and OCI credentials are **NOT configured in
