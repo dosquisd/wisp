@@ -24,3 +24,4 @@ logs/*
 # Except some cases
 !.gitignore
 !.gitkeep
+!.github/
