@@ -20,7 +20,7 @@ back to those constants.
 | `wireguard_dns1` | `str` | `"1.1.1.1"` | Primary DNS pushed to the client |
 | `wireguard_dns2` | `str` | `"1.0.0.1"` | Secondary DNS pushed to the client |
 | `wireguard_port` | `int` | `0` | UDP port; `0` means a random port in `49152–65535` |
-| `force_current_ip` | `bool` | `False` | If true, restrict firewall/AllowedIPs to your current public IP (`/32`) |
+| `force_current_ip` | `bool` | `False` | If true, restrict the cloud firewall ingress to your current public IP (`/32`) — client routing is always full-tunnel |
 | `confirm_destroy` | `bool` | `True` | Ask for confirmation before tearing down the VPN from the tunnel view (`d`/`esc`/the destroy button). The "Don't ask again" checkbox in that dialog flips this to `False` and persists it to `[general]` |
 | `max_session_ttl_minutes` | `int` | `60` | Session TTL cap for the optional OS-level watchdog (`utils/watchdog.py`): when greater than zero, deploying schedules a timer that runs `wisp destroy` when the TTL expires — it survives TUI/process death. `0` disables the watchdog. The deploy screen toggles it per run; the CLI overrides it with `--ttl` |
 
@@ -30,10 +30,15 @@ call).
 
 ### `force_current_ip` behaviour
 
+This flag only affects the **cloud firewall** — who can reach the VM. Client
+routing is always full-tunnel:
+
 - **Security rules**: when true, ingress `cidr_blocks` is `["<your-ip>/32"]`;
   otherwise `["0.0.0.0/0"]`.
-- **Client AllowedIPs**: when true, `allowed_ips` is `"<your-ip>/32"`; otherwise
-  `"0.0.0.0/0,::/0"` (route all traffic through the tunnel).
+- **Client AllowedIPs**: always `"0.0.0.0/0,::/0"` (route all traffic through
+  the tunnel), regardless of this flag. AllowedIPs governs what the client
+  routes through the tunnel — mixing it with the firewall's ingress CIDR would
+  leave a VPN that only routes traffic to itself.
 
 Your current public IP is looked up via `https://api.ipify.org`
 (`utils.get_public_ip`).
@@ -280,3 +285,21 @@ The host's `authorized_keys` must contain your public key. The TUI deploy
 screen also collects these fields per run (the TOML section only pre-fills
 the form), and the CLI overrides them with `--host`, `--ssh-user`,
 `--ssh-port`, and `--ssh-key-path`.
+
+## Pulumi backend
+
+Stack state (including the encrypted per-deployment SSH key) lives in the
+Pulumi backend you authenticated with:
+
+- `pulumi login` (from the Quick start) defaults to the
+  [Pulumi Cloud](https://www.pulumi.com/docs/iac/concepts/state-and-backends/)
+  service — the state is stored under your organization and survives local
+  machine loss.
+- `pulumi login --local` or the `PULUMI_CONFIG_PASSPHRASE` flow keeps the
+  state on disk, encrypted with the passphrase. If you lose the machine and
+  that file, the state is gone with it: `wisp gc` would no longer see the
+  leftover stacks, and cloud resources would have to be cleaned from the
+  provider console.
+
+The backend choice affects `wisp gc`: it inspects the stacks of whichever
+backend is currently authenticated.

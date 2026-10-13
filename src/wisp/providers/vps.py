@@ -35,7 +35,7 @@ from wisp.config.credentials import VPSCredentials, resolve_vps_credentials
 from wisp.config.settings import WispConfig, load_wisp_config
 from wisp.providers.base import BaseProvider, DeployVMResult, ProgressCallback
 from wisp.schemas import InventoryContext
-from wisp.utils import get_public_ip, get_wireguard_port
+from wisp.utils import get_wireguard_port
 from wisp.wireguard import (
     connect_wireguard_client,
     disconnect_wireguard_client,
@@ -152,11 +152,11 @@ class VPSProvider(BaseProvider):
         if key_path and not key_path.exists():
             raise FileNotFoundError(f"SSH key not found: {key_path}")
 
-        # The installer reads the client's AllowedIPs from the inventory; a
-        # user-owned VPS follows the same rule as the cloud providers.
-        allowed_ips = (
-            f"{get_public_ip()}/32" if config.force_current_ip else "0.0.0.0/0,::/0"
-        )
+        # The installer reads the client's AllowedIPs from the inventory.
+        # Client routing is always full-tunnel: AllowedIPs governs what the
+        # client routes through the tunnel; the VPS has no cloud firewall
+        # for Wisp to restrict (force_current_ip does not apply here).
+        allowed_ips = "0.0.0.0/0,::/0"
         wireguard_port = (
             config.wireguard_port if config.wireguard_port > 0 else get_wireguard_port()
         )

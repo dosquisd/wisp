@@ -280,8 +280,10 @@ class WispConfig:
         wireguard_dns2 (str): Secondary DNS pushed to the client.
         wireguard_port (int): UDP port; ``0`` selects a random port in
             ``49152-65535``.
-        force_current_ip (bool): If true, restrict the firewall and client
-            AllowedIPs to your current public IP (``/32``).
+        force_current_ip (bool): If true, restrict the **cloud firewall
+            ingress** to your current public IP (``/32``) — only the firewall
+            is affected. The client's AllowedIPs always route all traffic
+            through the tunnel (full tunnel), regardless of this flag.
         confirm_destroy (bool): If true, the tunnel view asks for confirmation
             before tearing the VPN down (``d``/``esc``/the destroy button). The
             ``Don't ask again`` checkbox in that dialog flips it off and

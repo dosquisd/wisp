@@ -28,7 +28,6 @@ from wisp.providers.base import BaseProvider, DeployVMResult, ProgressCallback
 from wisp.schemas import InventoryContext
 from wisp.utils import (
     create_or_select_pulumi_stack,
-    get_public_ip,
     logger,
     secure_file,
 )
@@ -176,8 +175,10 @@ class PulumiProvider(BaseProvider, ABC):
             f"Private key written to '{WIREGUARD_KEY_PATH}' with permissions 600"
         )
 
-        # Determine the allowed IPs for the WireGuard clients
-        allowed_ips = f"{get_public_ip()}/32" if force_current_ip else "0.0.0.0/0,::/0"
+        # Client routing is always full-tunnel: AllowedIPs governs what the
+        # client routes through the tunnel, not who can reach the server
+        # (that is the firewall's job, where force_current_ip applies).
+        allowed_ips = "0.0.0.0/0,::/0"
 
         # Build the inventory context for remote configuration
         template_context = InventoryContext(
