@@ -156,15 +156,20 @@ class ShutdownScreen(WispScreen):
             return
 
         try:
-            self.app.call_from_thread(self._set_status, "Soltando recursos...")
-            guard.shutdown(self._reason)
+            self.app.call_from_thread(self._set_status, "Releasing resources...")
+            # The verdict is shutdown()'s return value — checking guard.armed
+            # here would always read False, since shutdown() marks the guard
+            # as finished by design. False means the teardown raised (the
+            # cause is in guard.last_error) or a concurrent trigger won.
+            failed = not guard.shutdown(self._reason)
         except Exception as exc:
             logger.error(f"Teardown raised: {exc}")
             self.app.call_from_thread(self._finish, failed=True, detail=str(exc))
             return
 
-        failed = not guard.armed
-        self.app.call_from_thread(self._finish, failed=failed)
+        self.app.call_from_thread(
+            self._finish, failed=failed, detail=guard.last_error or ""
+        )
 
     def _teardown_orphan(self) -> None:
         """Destroy the resources of a session left behind by a dead process."""

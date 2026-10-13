@@ -256,6 +256,7 @@ class SessionGuard:
         self._lock = threading.Lock()
         self._finished = False
         self._reason: str = ""
+        self._last_error: str | None = None
 
     @property
     def armed(self) -> bool:
@@ -287,8 +288,9 @@ class SessionGuard:
             reason (str): Short explanation, logged and passed to the teardown.
 
         Returns:
-            bool: True if this call ran the teardown, False if it was a no-op
-                (already shut down, or nothing was armed).
+            bool: True if this call ran the teardown cleanly (marker cleared),
+                False if it was a no-op (already shut down, nothing armed) or
+                the teardown raised — see :attr:`last_error` for the cause.
         """
         with self._lock:
             if self._finished or self._teardown is None:
@@ -304,11 +306,17 @@ class SessionGuard:
             # A failed teardown must not be swallowed silently: the resources
             # are probably still running, and the marker is left in place so
             # the next run can offer to clean up.
+            self._last_error = str(exc)
             logger.error(f"Session teardown failed ({reason}): {exc}")
             return False
         clear_active_session()
         logger.info("Session resources released")
         return True
+
+    @property
+    def last_error(self) -> str | None:
+        """Error message from the last failed teardown, if any."""
+        return self._last_error
 
 
 def _destroy_provider(provider_name: str):
