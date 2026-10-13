@@ -14,20 +14,51 @@ from wisp.daemon.protocol import ActionEnum, Request, Response
 from wisp.daemon.transport import BaseTransport, get_transport
 from wisp.utils.logger import logger
 
+# wg-quick(8) executes these directives from the config as root, so a client
+# config carrying them would hand arbitrary command execution to anyone who
+# can reach the daemon socket. Wisp's client configs never use them.
+FORBIDDEN_DIRECTIVES = {"preup", "postup", "predown", "postdown"}
+
+
+def validate_client_config(content: str) -> None:
+    """Reject WireGuard script hooks, which ``wg-quick`` runs as root.
+
+    Args:
+        content (str): The client configuration about to be written and
+            applied by the adapter.
+
+    Raises:
+        ValueError: When any forbidden script-hook directive is present.
+    """
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        key = stripped.split("=", 1)[0].strip().lower()
+        if key in FORBIDDEN_DIRECTIVES:
+            raise ValueError(f"Directive not allowed in client config: {key}")
+
 
 async def handle_connect(config_content: str, adapter: BaseAdapter) -> Response:
     """Write the WireGuard config and bring the ``wg0`` interface up.
 
-    Writes ``config_content`` to :data:`WG_CONF_PATH` with mode ``0600`` and runs
-    ``wg-quick up wg0``.
+    Validates ``config_content`` first (rejecting script-hook directives that
+    ``wg-quick`` runs as root), then writes it to :data:`WG_CONF_PATH` with
+    mode ``0600`` and runs ``wg-quick up wg0``.
 
     Args:
         config_content (str): The full WireGuard client configuration.
         adapter (BaseAdapter): The platform-specific adapter to use for connecting.
 
     Returns:
-        Response: ``ok=True`` on success, otherwise the command's stderr.
+        Response: ``ok=True`` on success, otherwise the reason the config was
+        rejected or the command's stderr.
     """
+    try:
+        validate_client_config(config_content)
+    except ValueError as e:
+        logger.warning(f"Rejected client config: {e}")
+        return Response(ok=False, message=str(e))
     try:
         adapter.connect(config_content)
         return Response(ok=True, message="connected")
