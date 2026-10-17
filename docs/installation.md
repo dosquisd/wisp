@@ -117,7 +117,7 @@ These are created/populated at runtime, independent of where you launch Wisp:
 | ------ | ---------- |
 | `WISP_DATA_DIR/keys/wireguard-key.pem` | SSH/WireGuard private key (`0600` on Linux, icacls on Windows) |
 | `WISP_DATA_DIR/wireguard-confs/wg0-client.conf` | Client config fetched from the VM |
-| `WISP_LOG_DIR/wisp.log` | Rotating log (5 MB × 5 backups) |
+| `WISP_LOG_DIR/wisp.log` | Rotating log (5 MB × 3 backups) |
 
 `WISP_DATA_DIR`, `WISP_CONFIG_DIR`, and `WISP_LOG_DIR` are resolved in
 `src/wisp/config/constants.py` from [`platformdirs`](https://pypi.org/project/platformdirs/),

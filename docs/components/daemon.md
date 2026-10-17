@@ -5,6 +5,17 @@ Runs as root under systemd (Linux) or as a native Windows Service (pywin32);
 the unprivileged frontend talks to it over a Unix socket (Linux) or Named Pipe
 (Windows). See also [security model](../security.md).
 
+## Logging
+
+The daemon's logs live in one place per platform:
+
+- **Linux**: `journalctl -u wisp.service` — the daemon logs to stderr at
+  `DEBUG` and journald captures it; no log file, and no filesystem paths are
+  touched.
+- **Windows**: `C:\ProgramData\wisp\logs\wisp.log` — an SCM service has no
+  console, so the service wrapper sets `WISP_LOG_DIR` process-locally before
+  importing the server and the daemon uses the regular rotating file handler.
+
 ## `daemon/protocol.py`
 
 Wire protocol shared by the daemon and its local client:

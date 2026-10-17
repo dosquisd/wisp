@@ -2,7 +2,10 @@
 
 Field-tested fixes — most of these were hit, diagnosed, and resolved in real
 sessions. When something fails, `--log-level debug` on any CLI command (or
-`logs/wisp.log`) usually names the exact step.
+`WISP_LOG_DIR/wisp.log`, e.g. `~/.local/state/wisp/log/wisp.log` on Linux)
+usually names the exact step. Daemon-side issues are diagnosed with
+`journalctl -u wisp.service` on Linux; on Windows the daemon logs to
+`C:\ProgramData\wisp\logs\wisp.log`.
 
 ## Daemon and socket
 

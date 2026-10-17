@@ -12,17 +12,19 @@ Consequences: running `wisp` from another project creates `keys/`,
 wheel the fallback lands inside the venv; `wireguard-server-install.sh` does
 not travel in the wheel.
 
-- [ ] `keys/` and `wireguard-confs/` -> `user_data_path("wisp")` (dir 0700)
-- [ ] `logs/` -> `user_log_path("wisp")`
-- [ ] `wireguard-server-install.sh` -> package data (`wisp/data/`, loaded via
+- [X] `keys/` and `wireguard-confs/` -> `user_data_path("wisp")` (dir 0700)
+- [X] `logs/` -> `user_log_path("wisp")`
+- [X] `wireguard-server-install.sh` -> package data (`wisp/data/`, loaded via
   `importlib.resources`)
-- [ ] `platformdirs` declared as an explicit dependency (today it would
+- [X] `platformdirs` declared as an explicit dependency (today it would
   arrive transitively)
-- [ ] Daemon (runs as root/SYSTEM): own log/data dir via a `WISP_LOG_DIR`
-  style env var
-- [ ] Migration path for existing repo-local `keys/`/`logs/` and decision on
+- [X] Daemon logging: Linux daemon → journald (stderr at DEBUG, no file, no
+  dirs touched); Windows daemon → file under `C:\ProgramData\wisp\logs` via a
+  process-local `WISP_LOG_DIR` set by the service wrapper — no machine-wide
+  env vars
+- [X] Migration path for existing repo-local `keys/`/`logs/` and decision on
   where `wisp.toml` lives (keep XDG user config as-is)
-- [ ] Until shipped, "run from the repo root" stays documented as a known
+- [X] Until shipped, "run from the repo root" stays documented as a known
   limitation in installation.md
 
 ## Publish to PyPI (name: `wisp-vpn`)
@@ -30,11 +32,11 @@ not travel in the wheel.
 Blocked by the path refactor above (a wheel without the server script and
 with CWD-dependent paths would misbehave).
 
-- [ ] `pyproject.toml`: `name = "wisp-vpn"` (console script stays `wisp`)
-- [ ] `uv lock` / `uv sync` to regenerate `uv.lock`
-- [ ] Rename GitHub repo to `wisp-vpn` + `git remote set-url`
-- [ ] Update `[project.urls]`
-- [ ] Build check: `uv build` and inspect wheel contents (script present,
+- [X] `pyproject.toml`: `name = "wisp-vpn"` (console script stays `wisp`)
+- [X] `uv lock` / `uv sync` to regenerate `uv.lock`
+- [X] Rename GitHub repo to `wisp-vpn` + `git remote set-url`
+- [X] Update `[project.urls]`
+- [X] Build check: `uv build` and inspect wheel contents (script present,
   no CWD assumptions)
 - [ ] First release tag + changelog
 

@@ -151,7 +151,7 @@ import time. The data directory is created with mode `0700`. The project-level
 
 `utils/logger.py` configures a `wisp` logger with:
 
-- A rotating file handler at `WISP_LOG_DIR/wisp.log` (5 MB per file, 5 backups),
+- A rotating file handler at `WISP_LOG_DIR/wisp.log` (5 MB per file, 3 backups),
   level
   `DEBUG`.
 - A console (stderr) handler at level `ERROR` by default. In CLI mode,

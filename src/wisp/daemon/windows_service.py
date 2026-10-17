@@ -1,10 +1,21 @@
 import asyncio
+import os
+from pathlib import Path
 
-import servicemanager  # pyright: ignore[reportMissingModuleSource]
-import win32service  # pyright: ignore[reportMissingModuleSource]
-import win32serviceutil  # pyright: ignore[reportMissingModuleSource]
+# An SCM service has no console: stderr is lost, so the file handler is this
+# process's only usable sink. Point it at the install's log dir via a
+# process-local default — never machine-wide. Must run before the server
+# import configures the logger.
+os.environ.setdefault(
+    "WISP_LOG_DIR",
+    str(Path(os.environ.get("ProgramData", r"C:\ProgramData")) / "wisp" / "logs"),
+)
 
-from wisp.daemon.server import main
+import servicemanager  # noqa: E402  # pyright: ignore[reportMissingModuleSource]
+import win32service  # noqa: E402  # pyright: ignore[reportMissingModuleSource]
+import win32serviceutil  # noqa: E402  # pyright: ignore[reportMissingModuleSource]
+
+from wisp.daemon.server import main  # noqa: E402
 from wisp.daemon.transport import WindowsNamedPipeTransport
 
 

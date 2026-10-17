@@ -75,9 +75,21 @@ Platform schedulers: `systemd-run --user` (Linux, transient one-shot unit) and
 
 ## `utils/logger.py`
 
-- `setup_logger(name) -> logging.Logger` — a logger with a rotating file handler
-  (`WISP_LOG_DIR/wisp.log`, 5 MB × 5, `DEBUG`) and a stderr handler
-  (`ERROR`).
-  Propagation disabled to avoid duplicates.
-- `logger` — the configured `"wisp"` logger (handler index `1` is the console
-  handler, raised to `DEBUG` in CLI mode).
+- `setup_logger(name) -> logging.Logger` — picks the sink by process type:
+  - **Daemon mode** (`WISP_DAEMON=1`, set process-locally by importing
+    `wisp.daemon`, and not Windows): a single stderr `StreamHandler` at
+    `DEBUG`, no file handler, and no directory creation. Journald captures
+    the service's stderr under systemd, and it is the multi-writer-safe sink
+    (Python `logging` is thread-safe but not process-safe, so a root daemon
+    must not rotate a file). Query with `journalctl -u wisp.service`.
+  - **User processes** (TUI/CLI, and the Windows daemon whose service
+    wrapper sets `WISP_LOG_DIR` process-locally): a rotating file handler
+    (`WISP_LOG_DIR/wisp.log`, 5 MB × 3, `DEBUG`) and a stderr handler
+    (`ERROR`), attached in that order — handler index `1` is the console
+    handler, raised to `DEBUG` in CLI mode.
+- `logger` — the configured `"wisp"` logger.
+
+The log directory resolves from `WISP_LOG_DIR` with a truthiness guard: an
+empty-string value falls back to the platformdirs default instead of
+resolving to the current working directory. The directory is created only in
+the file branch. Propagation disabled to avoid duplicates.
