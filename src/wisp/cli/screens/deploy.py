@@ -66,19 +66,18 @@ class DeployScreen(WispScreen):
 
     CSS = """
     /* The deploy card must fit a 24-row terminal without scrolling: a scroll on
-       this screen hides exactly what matters — the Start/Cancel buttons. All
-       margins here are trimmed hard, and the card padding is dropped, to keep
-       the whole card at 18 rows (it was 31). */
+       this screen hides exactly what matters — the Start/Cancel buttons. On a
+       24-row terminal the card's content area is 20 rows, so every widget must
+       fit within that budget. Margins are trimmed hard and the card padding is
+       dropped; the intro subtitle was removed (title + numbered steps already
+       carry it) and the TTL row keeps no top margin — that is what pays for
+       the bordered Input and Switch, which keep their full default look. */
     #deploy-card {
         padding: 0 2;
         height: auto;
     }
 
     #deploy-card .title {
-        margin-bottom: 0;
-    }
-
-    #deploy-card .subtitle {
         margin-bottom: 0;
     }
 
@@ -107,9 +106,13 @@ class DeployScreen(WispScreen):
         height: auto;
     }
 
+    /* TTL row: Label, bordered Switch and bordered Input keep their default
+       look (the row measures 3 — the Switch's tall border and the Input's
+       height are what make it read as a proper field), so the row gives up
+       its top margin instead of its affordances. */
     #ttl-row {
         height: auto;
-        margin-top: 1;
+        margin-top: 0;
     }
 
     #ttl-row Label {
@@ -144,10 +147,6 @@ class DeployScreen(WispScreen):
             with Vertical(classes="card", id="deploy-card"):
                 yield Static(
                     "[bold cyan]Deployment Wizard[/bold cyan]", classes="title"
-                )
-                yield Static(
-                    "Select provider and region for the new VPN.",
-                    classes="subtitle",
                 )
 
                 with Vertical(id="deploy-container"):
