@@ -20,12 +20,12 @@ pay-as-you-go pricing.
 
 <img src="https://raw.githubusercontent.com/dosquisd/wisp-vpn/main/.github/assets/demo-tui.gif" alt="Wisp TUI — deploy, tunnel, destroy" width="100%">
 
-[![Python](https://img.shields.io/badge/python-3.14%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
-[![License](https://img.shields.io/badge/license-MIT-10b981)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows-64748b)](docs/installation.md)
+[![Python](https://img.shields.io/badge/python-3.14%2B-3776AB?logo=python&logoColor=white)](https://github.com/dosquisd/wisp-vpn/pyproject.toml)
+[![License](https://img.shields.io/badge/license-MIT-10b981)]([LICENSE](https://github.com/dosquisd/wisp-vpn/tree/main/LICENSE))
+[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows-64748b)](https://github.com/dosquisd/wisp-vpn/tree/main/docs/installation.md)
 [![Providers](https://img.shields.io/badge/providers-aws%20%7C%20oci%20%7C%20gcp%20%7C%20vps-f59e0b)](#supported-providers)
 
-[Installation](#install) · [Quick start](#quick-start) · [Documentation](docs/README.md) · [Contributing](docs/contributing.md)
+[Installation](#install) · [Quick start](#quick-start) · [Documentation](https://github.com/dosquisd/wisp-vpn/tree/main/docs/README.md) · [Contributing](https://github.com/dosquisd/wisp-vpn/tree/main/docs/contributing.md)
 
 </div>
 
@@ -111,7 +111,7 @@ sudo ./setup.sh            # Linux; or: sudo ./setup.sh --skip-pulumi
 Then log out and back in (or `newgrp wisp`) so your `wisp` group membership
 takes effect. macOS is not supported yet (the daemon adapter is not
 implemented — see `MacOSAdapter` in
-[`daemon/adapter.py`](src/wisp/daemon/adapter.py)). A published PyPI package
+[`daemon/adapter.py`](https://github.com/dosquisd/wisp-vpn/src/wisp/daemon/adapter.py)). A published PyPI package
 with a one-command installer is planned.
 
 ## Quick start
@@ -160,26 +160,26 @@ wisp destroy aws --region eu-west-1  # tears it all down
 > **Note:** as of this writing, Wisp ships with support for `aws`, `oci`,
 > `gcp`, and `vps`. The provider layer is designed to be extensible — see
 > `ProviderEnum`
-> ([`src/wisp/providers/base.py`](src/wisp/providers/base.py)) and
+> ([`src/wisp/providers/base.py`](https://github.com/dosquisd/wisp-vpn/src/wisp/providers/base.py)) and
 > `PROVIDERS_MAP`
-> ([`src/wisp/providers/__init__.py`](src/wisp/providers/__init__.py)), or
-> the [contributing guide](docs/contributing.md#adding-a-cloud-provider) to
+> ([`src/wisp/providers/__init__.py`](https://github.com/dosquisd/wisp-vpn/src/wisp/providers/__init__.py)), or
+> the [contributing guide](https://github.com/dosquisd/wisp-vpn/tree/main/docs/contributing.md#adding-a-cloud-provider) to
 > add your own.
 
 ## Documentation
 
-Full documentation lives in [`docs/`](docs/README.md):
+Full documentation lives in [`docs/`](https://github.com/dosquisd/wisp-vpn/tree/main/docs/README.md):
 
 | | |
 | --- | --- |
-| [Architecture](docs/architecture.md) | High-level design, module map, runtime data flow |
-| [Installation](docs/installation.md) | System requirements, `setup.sh` / `setup.ps1`, daemon |
-| [Usage](docs/usage.md) | Full CLI and TUI reference |
-| [Configuration](docs/configuration.md) | `wisp.toml`, `WispConfig`, per-provider settings |
-| [Deployment flow](docs/deployment-flow.md) | Step-by-step deploy and destroy |
-| [Security model](docs/security.md) | Keys, firewall, socket permissions, trust boundaries |
-| [Components reference](docs/components/README.md) | Per-module reference |
-| [Contributing](docs/contributing.md) | Adding a provider, style, commits |
+| [Architecture](https://github.com/dosquisd/wisp-vpn/tree/main/docs/architecture.md) | High-level design, module map, runtime data flow |
+| [Installation](https://github.com/dosquisd/wisp-vpn/tree/main/docs/installation.md) | System requirements, `setup.sh` / `setup.ps1`, daemon |
+| [Usage](https://github.com/dosquisd/wisp-vpn/tree/main/docs/usage.md) | Full CLI and TUI reference |
+| [Configuration](https://github.com/dosquisd/wisp-vpn/tree/main/docs/configuration.md) | `wisp.toml`, `WispConfig`, per-provider settings |
+| [Deployment flow](https://github.com/dosquisd/wisp-vpn/tree/main/docs/deployment-flow.md) | Step-by-step deploy and destroy |
+| [Security model](https://github.com/dosquisd/wisp-vpn/tree/main/docs/security.md) | Keys, firewall, socket permissions, trust boundaries |
+| [Components reference](https://github.com/dosquisd/wisp-vpn/tree/main/docs/components/README.md) | Per-module reference |
+| [Contributing](https://github.com/dosquisd/wisp-vpn/tree/main/docs/contributing.md) | Adding a provider, style, commits |
 
 ## Security
 
@@ -188,13 +188,13 @@ The daemon socket is group-restricted (`root:wisp`). Cloud credentials are
 never stored by Wisp — each provider uses its standard SDK chain (the only
 file Wisp ever touches is the optional `[gcp].credentials_path`, which you
 point at; Wisp reads it, it does not manage it). Read the full
-[security model](docs/security.md).
+[security model](https://github.com/dosquisd/wisp-vpn/tree/main/docs/security.md).
 
 ## Contributing
 
 PRs against `main`. The provider layer is the easiest entry point — see
-[adding a cloud provider](docs/contributing.md#adding-a-cloud-provider).
+[adding a cloud provider](https://github.com/dosquisd/wisp-vpn/tree/main/docs/contributing.md#adding-a-cloud-provider).
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2026 Juan D. Perez
+[MIT](https://github.com/dosquisd/wisp-vpn/tree/main/LICENSE) — Copyright (c) 2026 Juan D. Perez
