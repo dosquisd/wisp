@@ -12,7 +12,6 @@ from abc import ABC
 from dataclasses import dataclass
 from pathlib import Path
 
-from wisp.config.constants import OCI_DEFAULT_COMPARTMENT_ID
 from wisp.config.settings import load_toml_config
 from wisp.utils.logger import logger
 
@@ -228,6 +227,8 @@ def resolve_oci_credentials() -> OCICredentials:
     Values set in ``wisp.toml`` take priority; anything not set falls back to
     the OCI SDK default config chain (~/.oci/config, env vars).
     """
+    from wisp.providers.oci.constants import DEFAULT_COMPARTMENT_ID
+
     toml_config = load_toml_config()
     oci_toml = toml_config.get("oci", {})
 
@@ -250,7 +251,7 @@ def resolve_oci_credentials() -> OCICredentials:
             "private_key_path", oci_config.get("key_file", "")
         ),
         region=oci_toml.get("region", oci_config.get("region", "")),
-        compartment_ocid=oci_toml.get("compartment_ocid", OCI_DEFAULT_COMPARTMENT_ID),
+        compartment_ocid=oci_toml.get("compartment_ocid", DEFAULT_COMPARTMENT_ID),
         profile=oci_toml.get("profile", "DEFAULT"),
     )
 

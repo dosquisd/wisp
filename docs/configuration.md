@@ -232,7 +232,7 @@ environment variables instead.
 | ------- | ------ | --------- | --------- |
 | `region` | `str` | `""` (SDK default) | OCI region for deployments (e.g. `"sa-bogota-1"`) |
 | `profile` | `str` | `"DEFAULT"` | Profile name in `~/.oci/config` — used to resolve credentials for region listing/validation |
-| `compartment_ocid` | `str` | `OCI_DEFAULT_COMPARTMENT_ID` | Compartment OCID (passed to the Pulumi deploy; defaults to tenancy) |
+| `compartment_ocid` | `str` | `DEFAULT_COMPARTMENT_ID` | Compartment OCID (passed to the Pulumi deploy; defaults to tenancy) |
 
 ### `[gcp]` section
 
