@@ -13,6 +13,7 @@ dependencies = [
     "google-cloud-compute>=1.54.0",
     "oci>=2.100.0",
     "paramiko>=5.0.0",
+    "platformdirs>=4.11.7",
     "pulumi>=3.0.0,<4.0.0",
     "pulumi-aws>=7.0.0,<8.0.0",
     "pulumi-gcp>=9.37.0",
@@ -33,6 +34,9 @@ Issues = "https://github.com/dosquisd/wisp/issues"
 [build-system]
 requires = ["setuptools>=84.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+wisp = ["data/*.sh"]
 
 # Use `uv tool install --editable .`
 [project.scripts]

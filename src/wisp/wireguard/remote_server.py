@@ -200,7 +200,7 @@ def remove_wisp_server_configs(
             # file referencing the user's own interface survives untouched.
             _run_remote(
                 ssh,
-                f"{prefix}sh -c 'grep -q \"^SERVER_WG_NIC=wisp-\""
+                f'{prefix}sh -c \'grep -q "^SERVER_WG_NIC=wisp-"'
                 " /etc/wireguard/params 2>/dev/null"
                 " && rm -f /etc/wireguard/params' || true",
             )
@@ -408,6 +408,9 @@ def configure_remote_server(
             )
 
         logger.debug(f"Downloading client config from {remote_conf_path}")
+        from pathlib import Path
+
+        Path(WIREGUARD_CLIENT_CONF_PATH).parent.mkdir(parents=True, exist_ok=True)
         sftp.get(remote_conf_path, str(WIREGUARD_CLIENT_CONF_PATH))
         sftp.close()
 

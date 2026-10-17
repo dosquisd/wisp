@@ -30,6 +30,7 @@ from wisp.config.constants import (
     WIREGUARD_DNS2,
     WIREGUARD_IPV4,
     WIREGUARD_IPV6,
+    ensure_client_conf_dir,
 )
 from wisp.config.credentials import VPSCredentials, resolve_vps_credentials
 from wisp.config.settings import WispConfig, load_wisp_config
@@ -195,6 +196,7 @@ class VPSProvider(BaseProvider):
 
         configure_remote_server(template_context, on_progress=on_progress)
 
+        ensure_client_conf_dir()
         connect_response = connect_wireguard_client(
             WIREGUARD_CLIENT_CONF_PATH.read_text()
         )

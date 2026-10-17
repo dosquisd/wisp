@@ -8,14 +8,33 @@ Two things need neutralising before a screen can be laid out:
   to live in a patched class method — an instance attribute never sees it.
 - `DeployScreen.fetch_live_regions` calls the boto3 / OCI / GCP region APIs, so
   it is stubbed to keep layout deterministic and offline.
+
+The runtime directory environment overrides are set *before* importing the app
+(and thus before `wisp.config.constants` resolves paths), so tests never touch
+the developer's real data/config/log directories.
 """
 
 from __future__ import annotations
 
-import pytest
+import os
+import tempfile
+from pathlib import Path
 
-from wisp.cli.app import WispApp
-from wisp.cli.screens import ConfigScreen, DeployScreen, MainMenuScreen
+# Hermetic test roots — must run before the wisp imports below resolve paths.
+_test_root = Path(tempfile.mkdtemp(prefix="wisp-tests-"))
+for _var, _sub in (
+    ("WISP_DATA_DIR", "data"),
+    ("WISP_CONFIG_DIR", "config"),
+    ("WISP_LOG_DIR", "log"),
+):
+    _dir = _test_root / _sub
+    _dir.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault(_var, str(_dir))
+
+import pytest  # noqa: E402
+
+from wisp.cli.app import WispApp  # noqa: E402
+from wisp.cli.screens import ConfigScreen, DeployScreen, MainMenuScreen  # noqa: E402
 
 SCREENS = {
     "main_menu": MainMenuScreen,

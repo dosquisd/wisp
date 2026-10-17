@@ -2,6 +2,7 @@
 **/__pycache__/
 .venv
 .ruff_cache
+odd
 
 # Wisp configuration file
 wisp.toml
@@ -9,14 +10,6 @@ wisp.toml
 # Ignore build artifacts
 build
 **/*.egg-info
-
-# Ignore private keys and inventory files
-keys/*.pem
-
-# Wireguard configuration files
-wireguard-confs/*.conf
-
-logs/*
 
 # Ignore all hidden files
 .*

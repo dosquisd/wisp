@@ -21,7 +21,8 @@ from wisp.config.constants import (
     WIREGUARD_IPV4,
     WIREGUARD_IPV6,
     WIREGUARD_KEY_PATH,
-    WIREGUARD_KEYS_DIR,
+    ensure_client_conf_dir,
+    ensure_keys_dir,
 )
 from wisp.config.settings import WispConfig, load_wisp_config
 from wisp.providers.base import BaseProvider, DeployVMResult, ProgressCallback
@@ -167,7 +168,7 @@ class PulumiProvider(BaseProvider, ABC):
             on_progress("Configuring SSH keys...", 0.78)
 
         # Write the WireGuard/SSH private key
-        WIREGUARD_KEYS_DIR.mkdir(parents=True, exist_ok=True)
+        ensure_keys_dir()
         WIREGUARD_KEY_PATH.write_text(private_key, encoding="utf-8")
 
         secure_file(WIREGUARD_KEY_PATH)
@@ -206,6 +207,7 @@ class PulumiProvider(BaseProvider, ABC):
         # configure_remote_server streams its own granular progress (connect,
         # upload, live installer output, download) through the same callback.
         configure_remote_server(template_context, on_progress=on_progress)
+        ensure_client_conf_dir()
         connect_response = connect_wireguard_client(
             WIREGUARD_CLIENT_CONF_PATH.read_text()
         )

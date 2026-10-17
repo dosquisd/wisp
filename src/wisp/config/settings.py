@@ -1,9 +1,11 @@
 """Global and per-session configuration.
 
-The global configuration is loaded from ``wisp.toml`` (user-level and
-project-level merged) — this is the first thing Wisp loads at startup. It
-holds provider credentials, per-provider defaults, and general defaults
-(:data:`get_default_provider`, :data:`get_default_region_for`).
+The global configuration is loaded from a single user-level ``wisp.toml`` —
+this is the first thing Wisp loads at startup. It holds provider credentials,
+per-provider defaults, and general defaults (:data:`get_default_provider`,
+:data:`get_default_region_for`). Its location is ``WISP_CONFIG_DIR/wisp.toml``
+(``$WISP_CONFIG_DIR`` when set, else ``platformdirs.user_config_path("wisp")``);
+the project-level ``wisp.toml`` at the repo root is no longer read.
 
 :class:`WispConfig` is the per-session deployment settings object, built from
 the ``[general]`` TOML section via :func:`load_wisp_config` and edited in
@@ -27,7 +29,6 @@ from wisp.config.constants import (
     WIREGUARD_INTERFACE,
     WIREGUARD_IPV4,
     WIREGUARD_IPV6,
-    WISP_PROJECT_CONFIG_PATH,
     WISP_USER_CONFIG_PATH,
 )
 
@@ -58,21 +59,17 @@ def _read_toml_file(path: Path) -> dict[str, Any]:
 def load_toml_config() -> dict[str, Any]:
     """Load the global TOML configuration (cached after first load).
 
-    Search order (later files override earlier ones, key by key):
-    1. Project-level: ``<repo root>/wisp.toml``.
-    2. User-level: ``~/.config/wisp/wisp.toml`` (Linux),
-       ``~/Library/Application Support/wisp/wisp.toml`` (macOS),
-       ``%APPDATA%\\wisp\\wisp.toml`` (Windows) — **wins** on any key set
-       in both, since it's the file meant to follow you across projects.
-       See :func:`get_active_config_path` for the single-file equivalent
-       of this rule (used as the write target when the TUI saves).
+    Reads from a single user-level location: ``wisp.toml`` in the Wisp
+    config directory (``$WISP_CONFIG_DIR`` if set, otherwise
+    ``platformdirs.user_config_path("wisp")``). See
+    :func:`get_active_config_path` for details.
 
-    The parsed result is cached; subsequent calls return the same merged
-    dict without re-reading the files. Use :func:`reload_toml_config` to
+    The parsed result is cached; subsequent calls return the same dict
+    without re-reading the file. Use :func:`reload_toml_config` to
     force a fresh read (e.g. after editing values).
 
     Returns:
-        dict[str, Any]: Merged config as a dict, or empty dict if no
+        dict[str, Any]: Config as a dict, or empty dict if no
             config file was found.
     """
     global _cached_config
@@ -84,11 +81,11 @@ def load_toml_config() -> dict[str, Any]:
 def reload_toml_config() -> dict[str, Any]:
     """Force a fresh read of the global TOML configuration.
 
-    Clears the cache and re-reads both config files, returning the new
-    merged result.
+    Clears the cache and re-reads the config file, returning the new
+    result.
 
     Returns:
-        dict[str, Any]: Freshly merged config as a dict.
+        dict[str, Any]: Freshly read config as a dict.
     """
     global _cached_config
     _cached_config = _merge_toml_files()
@@ -96,72 +93,38 @@ def reload_toml_config() -> dict[str, Any]:
 
 
 def _merge_toml_files() -> dict[str, Any]:
-    """Read and merge project-level + user-level TOML files (no caching).
+    """Read the single user-level TOML file (no caching).
 
-    Iterated in this order (project first, user second) so that, per
-    section, ``dict.update`` lets the user-level value win on shared keys —
-    see :func:`get_active_config_path` for why user-level takes priority.
+    Returns:
+        dict[str, Any]: Parsed config, or an empty dict when the file is
+            missing or invalid.
     """
-    config: dict[str, Any] = {}
-
-    for path in (WISP_PROJECT_CONFIG_PATH, WISP_USER_CONFIG_PATH):
-        parsed = _read_toml_file(path)
-        if not parsed:
-            continue
-        # Merge section by section so user-level keys override project-level.
-        for section, values in parsed.items():
-            if section not in config:
-                config[section] = {}
-            if isinstance(values, dict):
-                config[section].update(values)
-
-    return config
+    parsed = _read_toml_file(WISP_USER_CONFIG_PATH)
+    if not parsed:
+        return {}
+    # Return as-is (shallow structure is fine for top-level sections)
+    return parsed
 
 
 def get_active_config_path() -> Path:
-    """Return the single wisp.toml that reads/writes should treat as primary.
+    """Return the single wisp.toml used as both read source and write target.
 
-    :func:`load_toml_config` already merges *both* files for reading, with
-    the user-level file winning key by key. But a single canonical file is
-    still needed as the *write* target — e.g. for the TUI's "Save" action
-    — so this is the one place that decides which file that is, instead of
-    every caller re-deriving it with its own little existence check (which
-    is exactly the kind of scattered logic this function replaces).
+    Wisp has exactly one config file now — there is no user/project merge and
+    therefore nothing to disambiguate. The TUI's Save action writes here.
 
-    Preference order:
-    1. The user-level file, if it has any parsed content.
-    2. The project-level file, if *that* has content (and the user-level
-       one doesn't).
-    3. The user-level path, as the default target for a first-ever save —
-       both files always exist on disk (see
-       :func:`wisp.config.constants.__prepare_config_file`), just possibly
-       empty, so "has content" is the only meaningful distinguishing check.
+    Returns:
+        Path: ``WISP_USER_CONFIG_PATH`` (``WISP_CONFIG_DIR/wisp.toml``).
     """
-    if _read_toml_file(WISP_USER_CONFIG_PATH):
-        return WISP_USER_CONFIG_PATH
-    if _read_toml_file(WISP_PROJECT_CONFIG_PATH):
-        return WISP_PROJECT_CONFIG_PATH
     return WISP_USER_CONFIG_PATH
 
 
 def describe_config_sources() -> str:
-    """Rich-markup one-liner on which wisp.toml is active, for TUI/log display.
+    """Rich-markup one-liner naming the active wisp.toml, for TUI/log display.
 
-    Flags the ambiguous case explicitly (both files have data) instead of
-    silently picking one, since that's exactly the situation that made this
-    worth a dedicated notice in the first place.
+    Returns:
+        str: A Rich markup string showing the single active config path.
     """
-    user_has_data = bool(_read_toml_file(WISP_USER_CONFIG_PATH))
-    project_has_data = bool(_read_toml_file(WISP_PROJECT_CONFIG_PATH))
-    active = get_active_config_path()
-
-    if user_has_data and project_has_data:
-        return (
-            f"[yellow]⚠[/yellow] Two wisp.toml files contain data (user and "
-            f"project). Using the [bold]user[/bold] one: [cyan]{active}[/cyan] — "
-            f"the project file only fills keys the user file does not define."
-        )
-    return f"[dim]Active config:[/dim] [cyan]{active}[/cyan]"
+    return f"[dim]Active config:[/dim] [cyan]{WISP_USER_CONFIG_PATH}[/cyan]"
 
 
 def get_default_provider() -> str:
@@ -190,9 +153,7 @@ def get_default_region_for(provider: str) -> str:
 def _write_toml_raw(path: Path, data: dict[str, Any]) -> None:
     """Write ``data`` as TOML to a single file, creating/securing it.
 
-    Requires the ``tomli-w`` package (``tomllib`` is read-only, by design —
-    it has no writer). Add it to the project's dependencies if it isn't
-    there yet: ``uv add tomli-w``.
+    Requires the ``tomli-w`` package.
     """
     import tomli_w
 
@@ -219,15 +180,20 @@ def save_session_config(
       survive the save.
     - For each ``provider: region`` pair in ``provider_regions``, only that
       section's ``region`` key is set (or removed, if ``region`` is empty).
-      Everything else in that section (credentials, profile, etc.) is left
-      exactly as-is — this function never writes secrets.
+      Everything else in that section is left exactly as-is.
 
-    The *other* wisp.toml (project vs. user) is never touched. Defaults to
-    :func:`get_active_config_path` when ``path`` isn't given.
+    Defaults to :func:`get_active_config_path` when ``path`` isn't given.
+
+    Args:
+        cfg (WispConfig): Per-session settings to persist.
+        provider_regions (dict[str, str] | None): Optional ``provider: region``
+            pairs whose section ``region`` key is updated. ``None`` leaves
+            provider sections untouched.
+        path (Path | None): Explicit write target; defaults to the active
+            config path.
 
     Returns:
-        Path: The file that was actually written, so the caller can tell
-            the user where their settings went.
+        Path: The file that was actually written.
     """
     target = path or get_active_config_path()
     data = _read_toml_file(target)
@@ -269,31 +235,6 @@ class WispConfig:
 
     Edited in memory by the TUI Configuration screen (not persisted to disk).
     Defaults are drawn from :mod:`wisp.config.constants`.
-
-    Attributes:
-        vm_boot_timeout (int): Seconds to wait for the VM to boot / SSH to come
-            up before configuring WireGuard.
-        wireguard_interface (str): WireGuard interface name (e.g. ``wg0``).
-        wireguard_ipv4 (str): Server-side WireGuard IPv4 address.
-        wireguard_ipv6 (str): Server-side WireGuard IPv6 address.
-        wireguard_dns1 (str): Primary DNS pushed to the client.
-        wireguard_dns2 (str): Secondary DNS pushed to the client.
-        wireguard_port (int): UDP port; ``0`` selects a random port in
-            ``49152-65535``.
-        force_current_ip (bool): If true, restrict the **cloud firewall
-            ingress** to your current public IP (``/32``) — only the firewall
-            is affected. The client's AllowedIPs always route all traffic
-            through the tunnel (full tunnel), regardless of this flag.
-        confirm_destroy (bool): If true, the tunnel view asks for confirmation
-            before tearing the VPN down (``d``/``esc``/the destroy button). The
-            ``Don't ask again`` checkbox in that dialog flips it off and
-            persists it to ``[general]``.
-        max_session_ttl_minutes (int): Session lifetime cap in minutes used by
-            the optional OS-level watchdog (default: one hour). When greater
-            than zero, deploying schedules an OS-level one-shot that runs
-            ``wisp destroy`` when the TTL expires, so a crashed or forgotten
-            session cannot keep a billable VM running forever. The deploy
-            screen lets the user toggle it per deployment; ``0`` disables it.
     """
 
     vm_boot_timeout: int = DEFAULT_VM_BOOT_TIMEOUT_SECONDS

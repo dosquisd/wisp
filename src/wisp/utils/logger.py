@@ -1,17 +1,20 @@
 import logging
 import logging.handlers
+import os
+from pathlib import Path
 
-from wisp.config.constants import ROOTDIR
+from wisp.config.constants import WISP_LOG_DIR, ensure_log_dir
 
-log_dir = ROOTDIR / "logs"
-log_dir.mkdir(parents=True, exist_ok=True)  # Ensure the log directory exists
+# Configuring the logger creates its log directory (a deliberate side effect of
+# setting up file logging); nothing is created in the current working directory.
+ensure_log_dir()
 
 
 def setup_logger(name: str) -> logging.Logger:
     """Configure and return the wisp logger.
 
-    Attaches a rotating file handler at ``logs/wisp.log`` (5 MB per file, 5
-    backups, level ``DEBUG``) and a stderr handler (level ``ERROR``). Propagation
+    Attaches a rotating file handler at ``<WISP_LOG_DIR>/wisp.log`` (5 MB per file,
+    5 backups, level ``DEBUG``) and a stderr handler (level ``ERROR``). Propagation
     is disabled to prevent duplicate records.
 
     Args:
@@ -20,6 +23,11 @@ def setup_logger(name: str) -> logging.Logger:
     Returns:
         logging.Logger: The configured logger.
     """
+    log_dir = os.getenv("WISP_LOG_DIR", WISP_LOG_DIR)
+    if isinstance(log_dir, str):
+        log_dir = Path(log_dir)
+        log_dir.mkdir(parents=True, exist_ok=True)
+
     # Create main logger instance
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
@@ -33,8 +41,8 @@ def setup_logger(name: str) -> logging.Logger:
     )
     rotating_handler = logging.handlers.RotatingFileHandler(
         log_dir / "wisp.log",
-        maxBytes=5 * 1024 * 1024,  # 6MB per file
-        backupCount=5,  # Keep 5 backup files
+        maxBytes=5 * 1024 * 1024,  # 5MB per file
+        backupCount=3,  # Keep 5 backup files
         encoding="utf-8",
     )
     rotating_handler.setLevel(logging.DEBUG)
