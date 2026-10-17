@@ -18,7 +18,7 @@ tunnel** on your own VPS, ~2–3 minutes on a cloud provider (the VM boot is
 the slow part), and a typical session costs fractions of a cent on
 pay-as-you-go pricing.
 
-<img src=".github/assets/demo-tui.gif" alt="Wisp TUI — deploy, tunnel, destroy" width="100%">
+<img src="https://raw.githubusercontent.com/dosquisd/wisp-vpn/main/.github/assets/demo-tui.gif" alt="Wisp TUI — deploy, tunnel, destroy" width="100%">
 
 [![Python](https://img.shields.io/badge/python-3.14%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![License](https://img.shields.io/badge/license-MIT-10b981)](LICENSE)
