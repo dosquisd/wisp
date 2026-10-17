@@ -35,7 +35,7 @@ async def test_editing_a_field_marks_the_form_dirty(wisp_app, monkeypatch):
 
         assert screen._is_dirty() is True
         marker = screen.query_one("#dirty-marker", Static)
-        assert "cambios sin guardar" in str(marker.render()).strip()
+        assert "Unsaved changes" in str(marker.render()).strip()
 
 
 async def test_clean_form_pops_straight_back(wisp_app):
@@ -161,27 +161,26 @@ async def test_save_confirmed_persists_and_pops(wisp_app, monkeypatch):
         assert wisp_app.state.config.wireguard_port == 52111
 
 
-async def test_reset_clean_asks_when_clean(wisp_app):
+async def test_reset_clean_notifies_and_skips_modal(wisp_app):
+    """With a clean form there is nothing to reload: reset must stay on the
+    config screen (no modal) and raise an information notification."""
     async with wisp_app.run_test(size=(100, 45)) as pilot:
         await _open_config(pilot, wisp_app)
         assert wisp_app.screen._is_dirty() is False
 
         await _press_button(wisp_app, pilot, "#btn-reset")
 
-        assert isinstance(wisp_app.screen, ConfirmActionScreen)
-
-        await pilot.click("#btn-action-no")
-        await pilot.pause()
         assert isinstance(wisp_app.screen, ConfigScreen)
 
-        await _press_button(wisp_app, pilot, "#btn-reset")
-        await pilot.click("#btn-action-yes")
-        await pilot.pause()
-
-        assert isinstance(wisp_app.screen, ConfigScreen)
-        assert wisp_app.screen._is_dirty() is False
-        port = wisp_app.screen.query_one("#input-wireguard-port", Input)
-        assert port.value == str(wisp_app.state.config.wireguard_port)
+        # The notification is inspected via App._notifications: Textual's
+        # toasts live in an overlay that is fiddly to query, and no other
+        # test in this suite asserts notifications any other way.
+        notifications = list(wisp_app._notifications)
+        assert any(
+            "Nothing to reset" in notification.message
+            and notification.severity == "information"
+            for notification in notifications
+        )
 
 
 async def test_arrows_move_focus_inside_confirm_modals(wisp_app, monkeypatch):
