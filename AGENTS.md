@@ -68,14 +68,23 @@ src/wisp/
 Supporting non-Python assets at the repo root:
 
 ```text
-scripts/    wireguard-server-install.sh  # Non-interactive WireGuard installer (angristan, MIT)
-            wireguard-client-install.sh  # Client installer
+scripts/    wireguard-client-install.sh  # Client installer
             utils.sh                     # Shared shell helpers (installWireGuardClient, etc.)
 setup.sh                                 # Linux installer: daemon (systemd), WireGuard tools, Pulumi
 setup.ps1                                # Windows installer: native service, WireGuard exe, Pulumi via winget
 packaging/  wisp.socket, wisp.service    # systemd units (Linux only)
-wisp.toml.example                        # Config template (wisp.toml itself is gitignored)
+wisp.toml.example                        # Config template (wisp.toml is written to WISP_CONFIG_DIR)
 ```
+
+Non-Python assets shipped **inside** the package:
+
+```text
+src/wisp/data/wireguard-server-install.sh  # Non-interactive WireGuard installer (angristan, MIT)
+```
+
+Runtime artifacts (private key, client config, logs) and `wisp.toml` are
+resolved per user via `platformdirs` (env overrides `WISP_DATA_DIR`,
+`WISP_CONFIG_DIR`, `WISP_LOG_DIR`) — never relative to the CWD or the repo.
 
 ## Conventions (non-negotiable)
 
@@ -140,8 +149,8 @@ wisp.toml.example                        # Config template (wisp.toml itself is 
   `providers/base.py`. Never chain comparisons on the enum value
   (`"AWS" if ... else "OCI"` silently labels GCP as OCI).
 - **Remote server configuration is Paramiko SSH/SFTP** (no Ansible, no
-  Jinja2): `wireguard/remote_server.py` uploads
-  `scripts/wireguard-server-install.sh` (a 687-line angristan installer —
+  Jinja2): `wireguard/remote_server.py` uploads the packaged
+  `src/wisp/data/wireguard-server-install.sh` (a 687-line angristan installer —
   **NOT optional**, it configures the remote server) to `/tmp/` and executes
   it with `sudo` via env vars (`SERVER_PUB_IP`, `SERVER_PORT`, `ALLOWED_IPS`,
   `AUTO_INSTALL=y`, etc.).
@@ -165,7 +174,7 @@ wisp.toml.example                        # Config template (wisp.toml itself is 
   `wisp-project`).
 - **Deploy flow** (shared in `PulumiProvider.deploy_vm`): resolve config →
   `pulumi up` with the provider program → wait `vm_boot_timeout` (default
-  60s) → persist RSA key to `keys/wireguard-key.pem` → configure remote
+  60s) → persist RSA key to `WISP_DATA_DIR/keys/wireguard-key.pem` → configure remote
   server (Paramiko SSH/SFTP) → connect local client (daemon). The VPS
   provider (`VPSProvider.deploy_vm`) skips provisioning/boot-wait entirely:
   SSH → configure remote server → connect local client.

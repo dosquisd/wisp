@@ -52,13 +52,15 @@ src/wisp/
 Supporting non-Python assets at the repository root:
 
 ```console
-scripts/    *.sh                     # WireGuard install/uninstall + shared shell utils
+scripts/    *.sh                     # WireGuard client install + shared shell utils
 packaging/  wisp.service, wisp.socket# systemd units for the daemon (Linux)
 setup.ps1                            # Native Windows installer (service + WireGuard exe)
-keys/       (runtime)                # Generated SSH/WireGuard private key (gitignored)
-wireguard-confs/ (runtime)           # Fetched client config (gitignored)
-logs/       (runtime)                # Rotating log files (gitignored)
 ```
+
+Runtime artifacts (private key, client config, logs) no longer live in the repo:
+they are resolved per user via `platformdirs` (see
+[Configuration](./configuration.md)). The server installer itself ships as
+package data at `src/wisp/data/wireguard-server-install.sh`.
 
 ## Runtime components and boundaries
 
@@ -93,11 +95,11 @@ User → TUI/CLI
             - instance (+ VCN/subnet on OCI)
             - exports: instance_id, public/private ip, private_key, wg_port, ssh_user
       → wait `config.vm_boot_timeout` seconds for SSH/boot (default 60)
-      → write private key to keys/wireguard-key.pem (0600 / icacls on Windows)
+      → write private key to WISP_DATA_DIR/keys/wireguard-key.pem (0600 / icacls on Windows)
       → configure_remote_server(context)
-            → Paramiko SSH/SFTP: upload + run scripts/wireguard-server-install.sh
+            → Paramiko SSH/SFTP: upload + run packaged wireguard-server-install.sh
               (non-interactive, driven by env vars)
-            - fetches wg0-client-*.conf → wireguard-confs/wg0-client.conf
+            - fetches wg0-client-*.conf → WISP_DATA_DIR/wireguard-confs/wg0-client.conf
       → connect_wireguard_client(conf_text)
             → daemon: write config (0600) + `wg-quick up wg0`
   → returns DeployVMResult(instance_id, public_ip, private_ip, wireguard_port)
@@ -113,7 +115,8 @@ User → TUI/CLI
   → Provider.delete_vm(region)
       → disconnect_wireguard_client()  → daemon: `wg-quick down wg0`
       → Pulumi Automation: stack.cancel() (no-op if idle) → stack.destroy()
-      → remove local artifacts: keys/wireguard-key.pem, wireguard-confs/wg0-client.conf
+      → remove local artifacts: WISP_DATA_DIR/keys/wireguard-key.pem,
+        WISP_DATA_DIR/wireguard-confs/wg0-client.conf
   → returns count of deleted resources
 
   VPS provider: additionally SSHes in and tears down every /etc/wireguard/

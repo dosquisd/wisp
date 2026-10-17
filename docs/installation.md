@@ -103,6 +103,7 @@ Declared in `pyproject.toml` and installed automatically by `uv tool install`
 - `oci` — OCI SDK (regions, credentials).
 - `google-cloud-compute` — GCP SDK (regions, credentials).
 - `paramiko` — SSH/SFTP remote server configuration.
+- `platformdirs` — per-user data/config/log directory resolution.
 - `textual` — the terminal UI.
 - `tomli-w` — writes `wisp.toml` when the TUI saves settings.
 - `tqdm` — CLI-mode progress bar.
@@ -110,20 +111,26 @@ Declared in `pyproject.toml` and installed automatically by `uv tool install`
 
 ## Runtime directories
 
-These are created/populated at runtime and are gitignored:
+These are created/populated at runtime, independent of where you launch Wisp:
 
 | Path | Contents |
 | ------ | ---------- |
-| `keys/wireguard-key.pem` | SSH/WireGuard private key (`0600` on Linux, icacls on Windows) |
-| `wireguard-confs/wg0-client.conf` | Client config fetched from the VM |
-| `logs/wisp.log` | Rotating log (5 MB × 5 backups) |
+| `WISP_DATA_DIR/keys/wireguard-key.pem` | SSH/WireGuard private key (`0600` on Linux, icacls on Windows) |
+| `WISP_DATA_DIR/wireguard-confs/wg0-client.conf` | Client config fetched from the VM |
+| `WISP_LOG_DIR/wisp.log` | Rotating log (5 MB × 5 backups) |
 
-Paths are all derived from the current working directory in
-`src/wisp/config/constants.py`. **Known limitation:** run Wisp from the
-repository root — launched from another project, `keys/`, `wireguard-confs/`,
-and `logs/` are created there. Resolving paths from user directories
-(`platformdirs`) instead of the CWD is planned; this is what currently
-blocks publishing to PyPI.
+`WISP_DATA_DIR`, `WISP_CONFIG_DIR`, and `WISP_LOG_DIR` are resolved in
+`src/wisp/config/constants.py` from [`platformdirs`](https://pypi.org/project/platformdirs/),
+so a built wheel works from any directory. On Linux the defaults are
+`~/.local/share/wisp` (data), `~/.config/wisp` (config), and
+`~/.local/state/wisp/log` (logs). Set the environment variables to override
+any of them:
+
+```bash
+export WISP_DATA_DIR=~/.local/share/wisp     # keys/ and wireguard-confs/
+export WISP_CONFIG_DIR=~/.config/wisp        # wisp.toml, active-session.json
+export WISP_LOG_DIR=~/.local/state/wisp/log  # wisp.log
+```
 
 ## Upgrading
 
@@ -148,12 +155,12 @@ uv tool uninstall wisp
 sudo systemctl disable --now wisp.socket wisp.service
 sudo rm -f /usr/lib/systemd/system/wisp.socket /usr/lib/systemd/system/wisp.service
 sudo groupdel wisp
-rm -rf ~/.config/wisp logs keys wireguard-confs
+rm -rf ~/.config/wisp ~/.local/share/wisp ~/.local/state/wisp
 ```
 
 ```powershell
 # Windows
 Stop-Service WispService
 uv tool uninstall wisp
-Remove-Item -Recurse -Force "$env:USERPROFILE\.config\wisp", logs, keys, wireguard-confs
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\wisp"
 ```

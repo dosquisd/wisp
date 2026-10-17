@@ -1,12 +1,12 @@
 # Wisp configuration file.
 #
-# Copy this file to `wisp.toml` in the project root (or your user config dir)
-# and fill in the values you need. Precedence:
-#   1. User-level file (highest priority, overrides project-level)
-#      - Linux:   ~/.config/wisp/wisp.toml
-#      - macOS:   ~/Library/Application Support/wisp/wisp.toml
-#      - Windows: %APPDATA%\wisp\wisp.toml
-#   2. Project-level: <repo root>/wisp.toml
+# Copy this file to `wisp.toml` in your user config directory
+# (resolved by platformdirs; override with `WISP_CONFIG_DIR`).
+# Fill in the values you need.
+#
+#   Linux:   ~/.config/wisp/wisp.toml (default)
+#   macOS:   ~/Library/Application Support/wisp/wisp.toml (default)
+#   Windows: %LOCALAPPDATA%\wisp\wisp.toml (default)
 #
 # Everything is OPTIONAL. The `[general]` section configures WispConfig
 # (WireGuard / VM boot settings); the `[aws]`, `[oci]`, and `[gcp]` sections

@@ -17,7 +17,8 @@ locations (the VPS flow). The client is closed on a failed connect.
 Configures the remote WireGuard server using Paramiko (SSH/SFTP):
 
 1. Establishes an SSH connection via `_connect_ssh`.
-2. Uploads `scripts/wireguard-server-install.sh` via SFTP to
+2. Uploads the packaged `wireguard-server-install.sh` (package data at
+   `src/wisp/data/`) via SFTP to
    `/tmp/wireguard-install.sh` and makes it executable.
 3. Executes the script remotely with `sudo` (via a pseudo-terminal), passing
    the configuration as environment variables: `SERVER_PUB_IP`, `SERVER_PORT`,
@@ -26,7 +27,8 @@ Configures the remote WireGuard server using Paramiko (SSH/SFTP):
    `CLIENT_WG_IPV4`, `CLIENT_WG_IPV6`, `SKIP_CLIENT_CREATION`.
 4. Locates the generated client config (`wg0-client-*.conf`, with a fallback to
    the SSH user's home directory) and downloads it via SFTP to
-   `wireguard-confs/wg0-client.conf`.
+   `WISP_DATA_DIR/wireguard-confs/wg0-client.conf` (creating the parent
+   directory first).
 
 See [deployment flow](../deployment-flow.md#deploy).
 

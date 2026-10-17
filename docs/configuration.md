@@ -1,9 +1,8 @@
 # Configuration
 
-Configuration is loaded from `wisp.toml` (user-level and project-level merged —
-user-level overrides project-level). Per-session deployment settings live in the
-`WispConfig` dataclass, built from the `[general]` TOML section, and
-defaults/paths are constants.
+Configuration is loaded from a single user-level `wisp.toml`. Per-session
+deployment settings live in the `WispConfig` dataclass, built from the
+`[general]` TOML section, and defaults/paths are constants.
 
 ## `WispConfig` (`config/settings.py`)
 
@@ -58,22 +57,29 @@ Your current public IP is looked up via `https://api.ipify.org`
 
 ### Paths
 
-`ROOTDIR` is resolved by walking up from the current working directory until it
-finds a `pyproject.toml` anchor, falling back to the file location of
-`constants.py` if not found.
+Paths are resolved from [`platformdirs`](https://pypi.org/project/platformdirs/),
+independently of the current working directory, so a built wheel works from any
+directory. Three environment variables override the base directories:
+`WISP_DATA_DIR`, `WISP_CONFIG_DIR`, and `WISP_LOG_DIR`.
 
-| Constant | Path (relative to repo root) |
-| ---------- | ------------------------------ |
-| `WIREGUARD_SCRIPT_PATH` | `scripts/wireguard-server-install.sh` |
-| `WIREGUARD_KEYS_DIR` | `keys/` |
-| `WIREGUARD_KEY_PATH` | `keys/wireguard-key.pem` |
-| `WIREGUARD_CLIENT_CONF_PATH` | `wireguard-confs/wg0-client.conf` |
+| Constant | Path |
+| ---------- | ------ |
+| `WISP_DATA_DIR` | `$WISP_DATA_DIR`, else `platformdirs.user_data_path("wisp")` (Linux: `~/.local/share/wisp`) |
+| `WIREGUARD_KEYS_DIR` | `WISP_DATA_DIR/keys` |
+| `WIREGUARD_KEY_PATH` | `WISP_DATA_DIR/keys/wireguard-key.pem` |
+| `WIREGUARD_CLIENT_CONF_PATH` | `WISP_DATA_DIR/wireguard-confs/wg0-client.conf` |
+| `WISP_CONFIG_DIR` | `$WISP_CONFIG_DIR`, else `platformdirs.user_config_path("wisp")` (Linux: `~/.config/wisp`) |
 | `WISP_CONFIG_FILE_NAME` | `wisp.toml` |
-| `WISP_PROJECT_CONFIG_PATH` | `<repo root>/wisp.toml` |
-| `WISP_USER_CONFIG_PATH` | `~/.config/wisp/wisp.toml` (Linux), `~/Library/Application Support/wisp/wisp.toml` (macOS), `%APPDATA%\wisp\wisp.toml` (Windows) |
+| `WISP_USER_CONFIG_PATH` | `WISP_CONFIG_DIR/wisp.toml` — the single `wisp.toml` Wisp reads and writes |
+| `WISP_ACTIVE_SESSION_PATH` | `WISP_CONFIG_DIR/active-session.json` |
+| `WISP_LOG_DIR` | `$WISP_LOG_DIR`, else `platformdirs.user_log_path("wisp")` (Linux: `~/.local/state/wisp/log`) |
+| `WIREGUARD_SCRIPT_PATH` | packaged data `wisp/data/wireguard-server-install.sh` (loaded via `importlib.resources`) |
 
-Both config file paths are created (empty) and secured at import time if they do
-not exist.
+Directories are created lazily by explicit helper functions
+(`ensure_data_dir`, `ensure_keys_dir`, `ensure_client_conf_dir`,
+`ensure_config_dir`, `ensure_log_dir`) when the code path needs them — never at
+import time. The data directory is created with mode `0700`. The project-level
+`wisp.toml` is no longer read: `wisp.toml` has a single, user-level location.
 
 ### WireGuard defaults
 
@@ -145,7 +151,8 @@ not exist.
 
 `utils/logger.py` configures a `wisp` logger with:
 
-- A rotating file handler at `logs/wisp.log` (5 MB per file, 5 backups), level
+- A rotating file handler at `WISP_LOG_DIR/wisp.log` (5 MB per file, 5 backups),
+  level
   `DEBUG`.
 - A console (stderr) handler at level `ERROR` by default. In CLI mode,
   `main.py` raises this handler to `DEBUG`.
@@ -167,8 +174,8 @@ current list). These sections are optional; if omitted, the provider SDK uses
 its default credential chain.
 
 Here is what a `wisp.toml` looks like with every section filled in (all
-values are examples — copy [`wisp.toml.example`](../wisp.toml.example) as a
-starting point):
+values are examples — copy [`wisp.toml.example`](../wisp.toml.example) to
+`WISP_CONFIG_DIR/wisp.toml` as a starting point):
 
 ```toml
 [general]

@@ -64,12 +64,13 @@ to the platform adapter for `connect` / `disconnect` / `status`.
   state stores it **encrypted at rest** instead of plaintext (older stacks
   created before this change keep the plaintext copy in their state until the
   resource is replaced or the state is edited).
-- The private key is written locally to `keys/wireguard-key.pem` with mode
-  `0600` (Linux) or secured via `icacls` with well-known SIDs (Windows),
-  and used as the SSH key for the remote server configuration.
+- The private key is written locally to `WISP_DATA_DIR/keys/wireguard-key.pem`
+  with mode `0600` (Linux) or secured via `icacls` with well-known SIDs
+  (Windows), and used as the SSH key for the remote server configuration.
 - On destroy, the key file and client config are removed.
-- `keys/*.pem` and `wireguard-confs/*.conf` are gitignored so secrets are not
-  committed.
+- The key and client config live under the per-user data directory
+  (`WISP_DATA_DIR`, mode `0700` on Linux) — outside the repository — so secrets
+  are never committed.
 - **Custom VPS uses YOUR key, not a generated one**: `ssh_key_path` is used
   as-is to SSH into your server — Wisp never generates, stores, or deletes
   it. Password authentication is not supported.

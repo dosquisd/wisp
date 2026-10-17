@@ -76,7 +76,8 @@ Platform schedulers: `systemd-run --user` (Linux, transient one-shot unit) and
 ## `utils/logger.py`
 
 - `setup_logger(name) -> logging.Logger` — a logger with a rotating file handler
-  (`logs/wisp.log`, 5 MB × 5, `DEBUG`) and a stderr handler (`ERROR`).
+  (`WISP_LOG_DIR/wisp.log`, 5 MB × 5, `DEBUG`) and a stderr handler
+  (`ERROR`).
   Propagation disabled to avoid duplicates.
 - `logger` — the configured `"wisp"` logger (handler index `1` is the console
   handler, raised to `DEBUG` in CLI mode).
